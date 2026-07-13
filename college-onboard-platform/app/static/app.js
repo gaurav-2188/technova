@@ -456,6 +456,10 @@ function updateDashboardView() {
                     const sec = document.createElement('div');
                     sec.className = 'verification-teacher-section mt-3';
 
+                    const aadhaarPath = t.document_paths?.aadhaar_card || '';
+                    const appointmentPath = t.document_paths?.appointment_letter || '';
+                    const tetPath = t.document_paths?.teacher_eligibility_test || '';
+
                     const aadhaar = t.documents[0] || 'Not Uploaded';
                     const appointment = t.documents[1] || 'Not Uploaded';
                     const tet = t.documents[2] || 'Not Uploaded';
@@ -474,7 +478,7 @@ function updateDashboardView() {
                                 <div class="verification-doc-file">${aadhaar}</div>
                                 ${t.documents[0] ? `
                                     <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 10px; width: 100%;">
-                                        <button class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 4px 6px;" onclick="viewDoc('${aadhaar}')">View</button>
+                                        <button class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 4px 6px;" onclick="viewDoc('${aadhaarPath || aadhaar}')">View</button>
                                         ${isAadhaarVerified ? `
                                             <button class="btn btn-success btn-sm" style="font-size: 0.75rem; padding: 4px 6px;" disabled>Approved ✓</button>
                                         ` : `
@@ -492,7 +496,7 @@ function updateDashboardView() {
                                 <div class="verification-doc-file">${appointment}</div>
                                 ${t.documents[1] ? `
                                     <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 10px; width: 100%;">
-                                        <button class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 4px 6px;" onclick="viewDoc('${appointment}')">View</button>
+                                        <button class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 4px 6px;" onclick="viewDoc('${appointmentPath || appointment}')">View</button>
                                         ${isAppointmentVerified ? `
                                             <button class="btn btn-success btn-sm" style="font-size: 0.75rem; padding: 4px 6px;" disabled>Approved ✓</button>
                                         ` : `
@@ -510,7 +514,7 @@ function updateDashboardView() {
                                 <div class="verification-doc-file">${tet}</div>
                                 ${t.documents[2] ? `
                                     <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 10px; width: 100%;">
-                                        <button class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 4px 6px;" onclick="viewDoc('${tet}')">View</button>
+                                        <button class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 4px 6px;" onclick="viewDoc('${tetPath || tet}')">View</button>
                                         ${isTetVerified ? `
                                             <button class="btn btn-success btn-sm" style="font-size: 0.75rem; padding: 4px 6px;" disabled>Approved ✓</button>
                                         ` : `
@@ -660,6 +664,10 @@ hrAddTeacherForm.addEventListener('submit', async (e) => {
 });
 
 window.viewDoc = function(docName) {
+    if (docName && (docName.startsWith('http://') || docName.startsWith('https://') || docName.startsWith('/static/uploads/'))) {
+        window.open(docName, "_blank");
+        return;
+    }
     const win = window.open("", "_blank");
     win.document.write(`
         <html>
@@ -952,25 +960,26 @@ if (batchSubmitBtn) {
 
         const filesToUpload = [];
         if (fileAadhaar && fileAadhaar.files && fileAadhaar.files.length > 0) {
-            filesToUpload.push({ name: fileAadhaar.files[0].name, type: 'aadhaar_card' });
+            filesToUpload.push({ file: fileAadhaar.files[0], type: 'aadhaar_card' });
         }
         if (fileAppointment && fileAppointment.files && fileAppointment.files.length > 0) {
-            filesToUpload.push({ name: fileAppointment.files[0].name, type: 'appointment_letter' });
+            filesToUpload.push({ file: fileAppointment.files[0], type: 'appointment_letter' });
         }
         if (fileTet && fileTet.files && fileTet.files.length > 0) {
-            filesToUpload.push({ name: fileTet.files[0].name, type: 'teacher_eligibility_test' });
+            filesToUpload.push({ file: fileTet.files[0], type: 'teacher_eligibility_test' });
         }
 
         try {
             let success = true;
             for (const item of filesToUpload) {
-                const res = await fetch('/api/action', {
+                const formData = new FormData();
+                formData.append("file", item.file);
+                formData.append("doc_type", item.type);
+                formData.append("username", currentUser);
+
+                const res = await fetch('/api/upload', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'upload_document',
-                        payload: { username: currentUser, document_name: item.name, doc_type: item.type }
-                    })
+                    body: formData
                 });
                 if (!res.ok) success = false;
             }

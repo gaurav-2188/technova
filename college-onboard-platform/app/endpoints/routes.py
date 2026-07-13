@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import Any, Dict, Optional, List
 import json
@@ -32,6 +32,71 @@ def webhook_upload(payload: dict) -> dict:
         "details": "Payload successfully scrubbed & queued.",
         "payload": scrubbed
     }
+
+@router.post("/api/upload")
+async def upload_document_endpoint(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    doc_type: str = Form(...),
+    username: str = Form(...)
+) -> dict:
+    from supabase import create_client
+    supabase_url = os.getenv("SUPABASE_URL", "").strip()
+    supabase_key = os.getenv("SUPABASE_KEY", "").strip()
+    
+    if not supabase_url or not supabase_key:
+        import os
+        static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+        user_dir = os.path.join(static_dir, "uploads", username)
+        os.makedirs(user_dir, exist_ok=True)
+        file_path = os.path.join(user_dir, f"{doc_type}.pdf")
+        content = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+        file_url = f"/static/uploads/{username}/{doc_type}.pdf"
+    else:
+        try:
+            client = create_client(supabase_url, supabase_key)
+            file_bytes = await file.read()
+            file_path = f"{username}/{doc_type}.pdf"
+            
+            res = client.storage.from_("documents").upload(
+                path=file_path,
+                file=file_bytes,
+                file_options={"cache-control": "3600", "upsert": "true"}
+            )
+            file_url = client.storage.from_("documents").get_public_url(file_path)
+        except Exception as e:
+            write_log("UPLOAD_ERROR", f"Supabase storage upload failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Supabase storage upload failed: {str(e)}")
+
+    store = LocalStateStore()
+    state = store.load_state()
+    if not state or "teachers" not in state or username not in state["teachers"]:
+        raise HTTPException(status_code=404, detail="Teacher not found.")
+
+    from app.core.agent import WorkflowState
+    teacher_data = state["teachers"][username]
+    matching_fields = {k: v for k, v in teacher_data.items() if k in WorkflowState.model_fields}
+    ws = WorkflowState(**matching_fields)
+    
+    if file.filename not in ws.documents:
+        ws.documents.append(file.filename)
+        
+    ws.update_document_upload_path(doc_type, file_url)
+    
+    all_uploaded = all(status in ["pending", "approved"] for status in ws.document_statuses.values())
+    if all_uploaded:
+        ws.onboarding_status_message = "Pending verification by HR"
+    else:
+        ws.onboarding_status_message = "Please upload remaining documents in document upload tab"
+
+    state["teachers"][username].update(ws.model_dump())
+    write_log("CANDIDATE_PORTAL", f"Uploaded document: {file.filename} -> {file_url} for teacher {username}")
+    store.save_state(state)
+    
+    return {"status": "success", "file_url": file_url}
+
 
 @router.get("/api/state")
 def get_state() -> dict:
