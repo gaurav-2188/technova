@@ -132,35 +132,16 @@ def get_state() -> dict:
             teacher["onboarding_status_message"] = "Please upload documents in document upload tab"
             modified = True
 
-        uploaded = teacher.get("documents", [])
         verified = teacher.get("verified_documents", [])
-
-        if len(uploaded) >= 1:
-            doc_name = uploaded[0]
-            teacher["document_paths"]["aadhaar_card"] = doc_name
-            if doc_name in verified:
-                teacher["document_statuses"]["aadhaar_card"] = "approved"
-            elif teacher["document_statuses"]["aadhaar_card"] not in ["approved", "rejected"]:
-                teacher["document_statuses"]["aadhaar_card"] = "pending"
-            modified = True
-
-        if len(uploaded) >= 2:
-            doc_name = uploaded[1]
-            teacher["document_paths"]["appointment_letter"] = doc_name
-            if doc_name in verified:
-                teacher["document_statuses"]["appointment_letter"] = "approved"
-            elif teacher["document_statuses"]["appointment_letter"] not in ["approved", "rejected"]:
-                teacher["document_statuses"]["appointment_letter"] = "pending"
-            modified = True
-
-        if len(uploaded) >= 3:
-            doc_name = uploaded[2]
-            teacher["document_paths"]["teacher_eligibility_test"] = doc_name
-            if doc_name in verified:
-                teacher["document_statuses"]["teacher_eligibility_test"] = "approved"
-            elif teacher["document_statuses"]["teacher_eligibility_test"] not in ["approved", "rejected"]:
-                teacher["document_statuses"]["teacher_eligibility_test"] = "pending"
-            modified = True
+        for doc_type in ["aadhaar_card", "appointment_letter", "teacher_eligibility_test"]:
+            path = teacher.get("document_paths", {}).get(doc_type, "")
+            if path:
+                filename = path.split("/")[-1]
+                if filename in verified:
+                    teacher["document_statuses"][doc_type] = "approved"
+                elif teacher["document_statuses"][doc_type] not in ["approved", "rejected"]:
+                    teacher["document_statuses"][doc_type] = "pending"
+                modified = True
 
     if modified:
         store.save_state(state)

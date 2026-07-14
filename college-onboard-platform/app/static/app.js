@@ -451,7 +451,8 @@ function updateDashboardView() {
 
             Object.keys(systemState.teachers).forEach(uname => {
                 const t = systemState.teachers[uname];
-                if (t.documents && t.documents.length > 0) {
+                const hasUploadedDocs = t.document_paths && (t.document_paths.aadhaar_card || t.document_paths.appointment_letter || t.document_paths.teacher_eligibility_test);
+                if (hasUploadedDocs) {
                     hasAnyDocs = true;
                     const sec = document.createElement('div');
                     sec.className = 'verification-teacher-section mt-3';
@@ -460,25 +461,35 @@ function updateDashboardView() {
                     const appointmentPath = t.document_paths?.appointment_letter || '';
                     const tetPath = t.document_paths?.teacher_eligibility_test || '';
 
-                    const aadhaar = t.documents[0] || 'Not Uploaded';
-                    const appointment = t.documents[1] || 'Not Uploaded';
-                    const tet = t.documents[2] || 'Not Uploaded';
+                    const getFileName = (path) => {
+                        if (!path) return 'Not Uploaded';
+                        try {
+                            const parts = path.split('/');
+                            return decodeURIComponent(parts[parts.length - 1]);
+                        } catch(e) {
+                            return path;
+                        }
+                    };
+
+                    const aadhaar = getFileName(aadhaarPath);
+                    const appointment = getFileName(appointmentPath);
+                    const tet = getFileName(tetPath);
 
                     const verifiedDocs = t.verified_documents || [];
-                    const isAadhaarVerified = verifiedDocs.includes(aadhaar);
-                    const isAppointmentVerified = verifiedDocs.includes(appointment);
-                    const isTetVerified = verifiedDocs.includes(tet);
+                    const isAadhaarVerified = verifiedDocs.includes(aadhaarPath) || verifiedDocs.includes(aadhaar);
+                    const isAppointmentVerified = verifiedDocs.includes(appointmentPath) || verifiedDocs.includes(appointment);
+                    const isTetVerified = verifiedDocs.includes(tetPath) || verifiedDocs.includes(tet);
 
                     sec.innerHTML = `
                         <div class="verification-teacher-header">${t.name} (@${t.username})</div>
                         <div class="verification-docs-grid">
-                            <div class="verification-doc-card ${t.documents[0] ? 'uploaded' : ''}">
+                            <div class="verification-doc-card ${aadhaarPath ? 'uploaded' : ''}">
                                 <div class="verification-doc-emoji">🪪</div>
                                 <div class="verification-doc-title">Aadhaar Card</div>
                                 <div class="verification-doc-file">${aadhaar}</div>
-                                ${t.documents[0] ? `
+                                ${aadhaarPath ? `
                                     <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 10px; width: 100%;">
-                                        <button class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 4px 6px;" onclick="viewDoc('${aadhaarPath || aadhaar}')">View</button>
+                                        <button class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 4px 6px;" onclick="viewDoc('${aadhaarPath}')">View</button>
                                         ${isAadhaarVerified ? `
                                             <button class="btn btn-success btn-sm" style="font-size: 0.75rem; padding: 4px 6px;" disabled>Approved ✓</button>
                                         ` : `
@@ -490,13 +501,13 @@ function updateDashboardView() {
                                     </div>
                                 ` : ''}
                             </div>
-                            <div class="verification-doc-card ${t.documents[1] ? 'uploaded' : ''}">
+                            <div class="verification-doc-card ${appointmentPath ? 'uploaded' : ''}">
                                 <div class="verification-doc-emoji">📄</div>
                                 <div class="verification-doc-title">Appointment Letter</div>
                                 <div class="verification-doc-file">${appointment}</div>
-                                ${t.documents[1] ? `
+                                ${appointmentPath ? `
                                     <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 10px; width: 100%;">
-                                        <button class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 4px 6px;" onclick="viewDoc('${appointmentPath || appointment}')">View</button>
+                                        <button class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 4px 6px;" onclick="viewDoc('${appointmentPath}')">View</button>
                                         ${isAppointmentVerified ? `
                                             <button class="btn btn-success btn-sm" style="font-size: 0.75rem; padding: 4px 6px;" disabled>Approved ✓</button>
                                         ` : `
@@ -508,13 +519,13 @@ function updateDashboardView() {
                                     </div>
                                 ` : ''}
                             </div>
-                            <div class="verification-doc-card ${t.documents[2] ? 'uploaded' : ''}">
+                            <div class="verification-doc-card ${tetPath ? 'uploaded' : ''}">
                                 <div class="verification-doc-emoji">🎓</div>
                                 <div class="verification-doc-title">Teacher Eligibility Test</div>
                                 <div class="verification-doc-file">${tet}</div>
-                                ${t.documents[2] ? `
+                                ${tetPath ? `
                                     <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 10px; width: 100%;">
-                                        <button class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 4px 6px;" onclick="viewDoc('${tetPath || tet}')">View</button>
+                                        <button class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 4px 6px;" onclick="viewDoc('${tetPath}')">View</button>
                                         ${isTetVerified ? `
                                             <button class="btn btn-success btn-sm" style="font-size: 0.75rem; padding: 4px 6px;" disabled>Approved ✓</button>
                                         ` : `
@@ -672,7 +683,7 @@ window.viewDoc = function(docName) {
     win.document.write(`
         <html>
         <head>
-            <title>Preview: \${docName}</title>
+            <title>Preview: ${docName}</title>
             <style>
                 body { background: #0d1117; color: #c9d1d9; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
                 .container { border: 1px solid #30363d; padding: 2rem; border-radius: 8px; background: #161b22; text-align: center; max-width: 500px; }
@@ -683,7 +694,7 @@ window.viewDoc = function(docName) {
         <body>
             <div class="container">
                 <h2>Document Preview</h2>
-                <p><strong>File Name:</strong> \${docName}</p>
+                <p><strong>File Name:</strong> ${docName}</p>
                 <p style="font-size: 0.9rem;">This is a simulated verification view for administrative preview of the submitted PDF asset.</p>
                 <button onclick="window.close()" style="background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; margin-top: 1rem;">Close Preview</button>
             </div>
