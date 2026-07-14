@@ -355,7 +355,16 @@ function updateDashboardView() {
 
                 if (status === 'pending' || status === 'approved') {
                     card.classList.add('staged');
-                    statusElem.innerText = path || 'File pending review';
+                    const getFileName = (pathString) => {
+                        if (!pathString) return 'File pending review';
+                        try {
+                            const parts = pathString.split('/');
+                            return decodeURIComponent(parts[parts.length - 1]);
+                        } catch(e) {
+                            return pathString;
+                        }
+                    };
+                    statusElem.innerText = getFileName(path);
                     dropArea.style.pointerEvents = 'none';
                     if (button) {
                         button.disabled = true;
