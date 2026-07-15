@@ -683,7 +683,6 @@ body {
     font-size: 0.9rem;
     margin-bottom: 0.25rem;
     color: #fff;
-    padding-right: 64px;
 }
 
 .ann-item p {
@@ -698,47 +697,6 @@ body {
     font-size: 0.7rem;
     color: var(--text-muted);
     margin-top: 0.75rem;
-}
-
-.ann-actions {
-    position: absolute;
-    top: 0.75rem;
-    right: 0.75rem;
-    display: flex;
-    gap: 0.35rem;
-}
-
-.ann-btn {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: var(--text-secondary);
-    padding: 5px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-}
-
-.ann-btn:hover {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.12);
-    border-color: rgba(255, 255, 255, 0.25);
-}
-
-.ann-btn.delete-btn {
-    color: #ff6b6b;
-    border-color: rgba(255, 107, 107, 0.15);
-    background: rgba(255, 107, 107, 0.03);
-}
-
-.ann-btn.delete-btn:hover {
-    color: #fff;
-    background: #e63946;
-    border-color: #e63946;
 }
 
 /* Row input alignment */

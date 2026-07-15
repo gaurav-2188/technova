@@ -241,13 +241,9 @@ function updateDashboardView() {
         let actionButtons = '';
         if (currentRole === 'admin') {
             actionButtons = `
-                <div class="ann-actions">
-                    <button class="ann-btn edit-btn" onclick="editAnnouncement(${ann.id}, '${ann.title.replace(/'/g, "\\'")}', '${ann.content.replace(/'/g, "\\'")}')" title="Edit Announcement">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/><path d="m15 5 3 3"/></svg>
-                    </button>
-                    <button class="ann-btn delete-btn" onclick="deleteAnnouncement(${ann.id})" title="Delete Announcement">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
-                    </button>
+                <div class="ann-actions" style="display: flex; gap: 6px;">
+                    <button class="btn btn-secondary btn-sm" onclick="editAnnouncement(${ann.id}, '${ann.title.replace(/'/g, "\\'")}', '${ann.content.replace(/'/g, "\\'")}')" title="Edit Announcement" style="padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center;">✏️</button>
+                    <button class="btn btn-secondary btn-sm" onclick="deleteAnnouncement(${ann.id})" title="Delete Announcement" style="padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; color: #ff6b6b; border-color: rgba(255, 107, 107, 0.2);">🗑️</button>
                 </div>
             `;
         }
@@ -255,11 +251,13 @@ function updateDashboardView() {
         annDiv.innerHTML = `
             <h4>${ann.title}</h4>
             <p>${ann.content}</p>
-            <div class="ann-meta">
-                <span>By: ${ann.sender}</span>
-                <span>Date: ${ann.date}</span>
+            <div class="ann-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem;">
+                <div class="ann-meta" style="margin-top: 0; display: flex; gap: 1.5rem; justify-content: space-between; flex-grow: 1; margin-right: 1.5rem;">
+                    <span>By: ${ann.sender}</span>
+                    <span>Date: ${ann.date}</span>
+                </div>
+                ${actionButtons}
             </div>
-            ${actionButtons}
         `;
         annListView.appendChild(annDiv);
     });
