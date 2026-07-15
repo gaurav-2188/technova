@@ -20,10 +20,10 @@ class PineconeRAGService:
 
         try:
             # 1. Get query embedding from Gemini (3072 dimensions)
-            embed_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent?key={self.gemini_key}"
+            embed_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key={self.gemini_key}"
             headers = {"Content-Type": "application/json"}
             data = {
-                "model": "models/gemini-embedding-2",
+                "model": "models/gemini-embedding-001",
                 "content": {"parts": [{"text": scrubbed}]},
                 "outputDimensionality": 3072
             }
