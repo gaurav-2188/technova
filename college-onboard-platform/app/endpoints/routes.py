@@ -521,6 +521,7 @@ def trigger_action(req: ActionRequest, background_tasks: BackgroundTasks) -> dic
         name = clean_and_capitalize_name(payload.get("name"))
         password = secrets.token_urlsafe(10)
 
+        import time
         state["teachers"][username] = {
             "name": name,
             "email": email,
@@ -529,6 +530,7 @@ def trigger_action(req: ActionRequest, background_tasks: BackgroundTasks) -> dic
             "username": username,
             "password": password,
             "employee_id": payload.get("employee_id", ""),
+            "created_at": payload.get("created_at") or int(time.time() * 1000),
             "seating_info": "Not Allotted",
             "attendance": [
                 {"date": "2026-06-10", "status": "Absent", "reason": "Personal Leave"},

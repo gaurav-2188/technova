@@ -682,6 +682,11 @@ function updateDashboardView() {
             if (!hasFocus) {
                 adminSeatingList.innerHTML = '';
                 const sortedSeatingTeachers = Object.values(systemState.teachers).sort((a, b) => {
+                    const timeA = a.created_at || 0;
+                    const timeB = b.created_at || 0;
+                    if (timeA !== timeB) {
+                        return timeB - timeA;
+                    }
                     const nameA = (a.name || '').toLowerCase();
                     const nameB = (b.name || '').toLowerCase();
                     if (nameA < nameB) return -1;
@@ -756,7 +761,7 @@ function updateDashboardView() {
                         <td>${t.department}</td>
                         <td>${t.email}</td>
                         <td>${seatingHTML}</td>
-                        <td>${t.documents ? t.documents.length : 0} file(s)</td>
+                        <td style="font-family: monospace; font-size: 0.9rem; color: #58a6ff;">${t.employee_id || 'N/A'}</td>
                     `;
                     adminTeachersTableBody.appendChild(tr);
                 }
@@ -774,7 +779,8 @@ hrAddTeacherForm.addEventListener('submit', async (e) => {
         email: document.getElementById('add-email').value,
         department: document.getElementById('add-dept').value,
         designation: document.getElementById('add-desig').value,
-        employee_id: document.getElementById('add-empid').value.trim()
+        employee_id: document.getElementById('add-empid').value.trim(),
+        created_at: Date.now()
     };
 
     const tempUsername = payload.email;
@@ -786,6 +792,7 @@ hrAddTeacherForm.addEventListener('submit', async (e) => {
         designation: payload.designation,
         username: tempUsername,
         employee_id: payload.employee_id,
+        created_at: payload.created_at,
         documents: [],
         document_statuses: {},
         document_paths: {},
