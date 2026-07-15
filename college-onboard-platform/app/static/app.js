@@ -801,11 +801,29 @@ window.verifyDoc = async function(username, docName, docType, approved) {
     }
 };
 
-window.editAnnouncement = async function(id, currentTitle, currentContent) {
-    const newTitle = prompt("Edit Announcement Title:", currentTitle);
-    if (newTitle === null) return;
-    const newContent = prompt("Edit Announcement Content:", currentContent);
-    if (newContent === null) return;
+window.editAnnouncement = function(id, currentTitle, currentContent) {
+    document.getElementById('edit-ann-id').value = id;
+    document.getElementById('edit-ann-title').value = currentTitle;
+    document.getElementById('edit-ann-content').value = currentContent;
+    document.getElementById('admin-edit-announcement-modal').classList.remove('hidden');
+};
+
+// Edit Announcement Modal Event Listeners
+document.getElementById('close-ann-modal-btn').addEventListener('click', () => {
+    document.getElementById('admin-edit-announcement-modal').classList.add('hidden');
+});
+
+document.getElementById('admin-edit-announcement-modal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('admin-edit-announcement-modal')) {
+        document.getElementById('admin-edit-announcement-modal').classList.add('hidden');
+    }
+});
+
+document.getElementById('admin-edit-announcement-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = parseInt(document.getElementById('edit-ann-id').value);
+    const newTitle = document.getElementById('edit-ann-title').value;
+    const newContent = document.getElementById('edit-ann-content').value;
     
     try {
         const res = await fetch('/api/action', {
@@ -818,6 +836,7 @@ window.editAnnouncement = async function(id, currentTitle, currentContent) {
         });
         if (res.ok) {
             alert('Announcement updated successfully!');
+            document.getElementById('admin-edit-announcement-modal').classList.add('hidden');
             syncStateData();
         } else {
             alert('Failed to update announcement.');
@@ -826,7 +845,7 @@ window.editAnnouncement = async function(id, currentTitle, currentContent) {
         console.error(err);
         alert('Server communication error.');
     }
-};
+});
 
 window.deleteAnnouncement = async function(id) {
     if (!confirm("Are you sure you want to delete this announcement?")) return;
