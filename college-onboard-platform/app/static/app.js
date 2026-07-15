@@ -640,12 +640,10 @@ function updateDashboardView() {
                 });
                 sortedSeatingTeachers.forEach(t => {
                     const isAllotted = t.seating_info && t.seating_info !== 'Not Allotted';
-                    const isEditing = editingSeating[t.username] === true;
-
                     const card = document.createElement('div');
                     card.className = 'verification-teacher-section mt-3';
 
-                    if (isAllotted && !isEditing) {
+                    if (isAllotted) {
                         card.innerHTML = `
                             <div class="verification-teacher-header">${t.name} (@${t.username})</div>
                             <div style="padding: 15px; background: rgba(255, 255, 255, 0.02); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.05); display: flex; flex-direction: column; gap: 10px;">
@@ -663,9 +661,9 @@ function updateDashboardView() {
                             <div style="padding: 15px; background: rgba(255, 255, 255, 0.02); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.05); display: flex; flex-direction: column; gap: 10px;">
                                 <div><strong>Department:</strong> ${t.department}</div>
                                 <div><strong>Designation:</strong> ${t.designation}</div>
-                                <div style="display: flex; gap: 10px; align-items: center; margin-top: 10px;">
-                                    <input type="text" id="seating-input-${t.username}" class="form-control" style="flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 8px 12px; border-radius: 6px;" placeholder="e.g. Room 402, Desk A" value="${isAllotted ? t.seating_info : ''}" required>
-                                    <button class="btn btn-primary btn-sm" style="padding: 8px 16px;" onclick="allocateSeating('${t.username}')">Allocate Space</button>
+                                <div style="display: flex; gap: 10px; align-items: center; justify-content: space-between; margin-top: 10px;">
+                                    <span style="font-size: 0.85rem; color: var(--text-secondary);">📍 Seating: <strong style="color: var(--text-secondary);">Not Allotted</strong></span>
+                                    <button class="btn btn-primary btn-sm" style="padding: 8px 16px;" onclick="openSeatingModal('${t.username}')">Allocate Space</button>
                                 </div>
                             </div>
                         `;
@@ -1474,3 +1472,187 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+// Seating Allotment Modal Logic
+let activeSeatingUsername = null;
+let activeSeatingRoom = '35';
+
+const SEATING_ROOMS = ['35', '36', '37', '38', '39', '40', '41', '42'];
+const SEATING_DESKS = ['25', '26', '27', '28', '29'];
+
+window.openSeatingModal = function(username) {
+    activeSeatingUsername = username;
+    const t = systemState.teachers[username];
+    if (!t) return;
+    
+    document.getElementById('seating-modal-teacher-subtitle').innerText = `Select a room and desk for ${t.name} (@${username})`;
+    
+    // Parse current seating if any to set activeSeatingRoom
+    if (t.seating_info && t.seating_info.startsWith('Room ')) {
+        const parts = t.seating_info.split(',');
+        if (parts.length > 0) {
+            const roomPart = parts[0].replace('Room ', '').trim();
+            if (SEATING_ROOMS.includes(roomPart)) {
+                activeSeatingRoom = roomPart;
+            }
+        }
+    } else {
+        activeSeatingRoom = SEATING_ROOMS[0];
+    }
+    
+    renderSeatingModalRooms();
+    renderSeatingModalSeats();
+    
+    document.getElementById('admin-seating-modal').classList.remove('hidden');
+};
+
+function renderSeatingModalRooms() {
+    const container = document.getElementById('seating-modal-rooms');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    SEATING_ROOMS.forEach(room => {
+        const btn = document.createElement('button');
+        btn.innerText = `Room ${room}`;
+        btn.style.background = (room === activeSeatingRoom) ? 'rgba(88, 166, 255, 0.15)' : 'rgba(255,255,255,0.03)';
+        btn.style.border = (room === activeSeatingRoom) ? '1px solid #58a6ff' : '1px solid rgba(255,255,255,0.08)';
+        btn.style.color = (room === activeSeatingRoom) ? '#58a6ff' : '#fff';
+        btn.style.padding = '12px 15px';
+        btn.style.borderRadius = '8px';
+        btn.style.cursor = 'pointer';
+        btn.style.textAlign = 'left';
+        btn.style.fontWeight = '600';
+        btn.style.transition = 'all 0.2s ease';
+        
+        btn.addEventListener('click', () => {
+            activeSeatingRoom = room;
+            renderSeatingModalRooms();
+            renderSeatingModalSeats();
+        });
+        
+        container.appendChild(btn);
+    });
+}
+
+function renderSeatingModalSeats() {
+    const grid = document.getElementById('seating-modal-seats-grid');
+    const title = document.getElementById('seating-modal-selected-room-title');
+    if (!grid || !title) return;
+    
+    title.innerText = `Room ${activeSeatingRoom} Seating Plan`;
+    grid.innerHTML = '';
+    
+    // Find occupied seats in activeSeatingRoom across all teachers
+    const occupiedSeats = {};
+    Object.values(systemState.teachers).forEach(t => {
+        if (t.seating_info && t.seating_info.startsWith(`Room ${activeSeatingRoom},`)) {
+            const parts = t.seating_info.split(', ');
+            if (parts.length > 1) {
+                const seatInfo = parts[1].replace('Desk ', '').trim();
+                occupiedSeats[seatInfo] = t.name;
+            }
+        }
+    });
+    
+    // Generate 6 rows, each having 5 columns corresponding to SEATING_DESKS
+    for (let row = 1; row <= 6; row++) {
+        SEATING_DESKS.forEach(deskNum => {
+            const seatKey = `${deskNum}-${row}`;
+            const occupiedBy = occupiedSeats[seatKey];
+            
+            const cell = document.createElement('div');
+            cell.innerText = deskNum;
+            cell.style.display = 'flex';
+            cell.style.alignItems = 'center';
+            cell.style.justifyContent = 'center';
+            cell.style.height = '50px';
+            cell.style.borderRadius = '6px';
+            cell.style.fontWeight = '600';
+            cell.style.fontSize = '0.95rem';
+            cell.style.transition = 'all 0.2s ease';
+            
+            if (occupiedBy) {
+                // Occupied seat styling (grey background, grey text, not clickable)
+                cell.style.background = 'rgba(255, 255, 255, 0.05)';
+                cell.style.border = '1px solid rgba(255, 255, 255, 0.08)';
+                cell.style.color = 'rgba(255, 255, 255, 0.25)';
+                cell.style.cursor = 'not-allowed';
+                cell.title = `Occupied by ${occupiedBy}`;
+            } else {
+                // Available seat styling (green border/outline, dark background)
+                cell.style.background = 'rgba(46, 160, 67, 0.03)';
+                cell.style.border = '2px solid #2ea043';
+                cell.style.color = '#2ea043';
+                cell.style.cursor = 'pointer';
+                cell.title = `Seat ${seatKey} (Available)`;
+                
+                cell.addEventListener('mouseover', () => {
+                    cell.style.background = 'rgba(46, 160, 67, 0.15)';
+                    cell.style.color = '#fff';
+                });
+                cell.addEventListener('mouseout', () => {
+                    cell.style.background = 'rgba(46, 160, 67, 0.03)';
+                    cell.style.color = '#2ea043';
+                });
+                
+                cell.addEventListener('click', async () => {
+                    await selectSeat(activeSeatingRoom, seatKey);
+                });
+            }
+            grid.appendChild(cell);
+        });
+    }
+}
+
+async function selectSeat(room, seatKey) {
+    if (!activeSeatingUsername) return;
+    const seatDesc = `Room ${room}, Desk ${seatKey}`;
+    
+    // Save original state for rollback
+    const originalSeating = systemState.teachers[activeSeatingUsername].seating_info;
+    
+    // Optimistic Update
+    systemState.teachers[activeSeatingUsername].seating_info = seatDesc;
+    updateDashboardView();
+    document.getElementById('admin-seating-modal').classList.add('hidden');
+    
+    const payload = {
+        username: activeSeatingUsername,
+        seating_info: seatDesc
+    };
+    
+    try {
+        const res = await fetch('/api/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'allot_seat', payload })
+        });
+        if (!res.ok) {
+            // Rollback
+            systemState.teachers[activeSeatingUsername].seating_info = originalSeating;
+            updateDashboardView();
+            alert('Seat allotment failed.');
+        } else {
+            syncStateData();
+        }
+    } catch (e) {
+        // Rollback
+        systemState.teachers[activeSeatingUsername].seating_info = originalSeating;
+        updateDashboardView();
+        alert('Server communication error.');
+    }
+}
+
+// Seating Modal Close Listeners
+document.getElementById('close-seating-modal-btn').addEventListener('click', () => {
+    document.getElementById('admin-seating-modal').classList.add('hidden');
+});
+document.getElementById('admin-seating-modal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('admin-seating-modal')) {
+        document.getElementById('admin-seating-modal').classList.add('hidden');
+    }
+});
+
+window.enableSeatingEdit = function(username) {
+    openSeatingModal(username);
+};
