@@ -415,12 +415,17 @@ function updateDashboardView() {
             const t = systemState.teachers[uname];
             
             // Count teachers waiting for verification
-            if (t.documents && t.documents.length > 0) {
-                const verifiedDocs = t.verified_documents || [];
-                const hasUnverified = t.documents.some(d => !verifiedDocs.includes(d));
-                if (hasUnverified) {
-                    pendingTeachersCount++;
+            const docStatuses = t.document_statuses || {};
+            const docPaths = t.document_paths || {};
+            let hasPending = false;
+            for (const docType of ['aadhaar_card', 'appointment_letter', 'teacher_eligibility_test']) {
+                if (docPaths[docType] && docStatuses[docType] === 'pending') {
+                    hasPending = true;
+                    break;
                 }
+            }
+            if (hasPending) {
+                pendingTeachersCount++;
             }
 
             const matchesQuery = !hrQuery || (t.employee_id && t.employee_id.toLowerCase().includes(hrQuery));
