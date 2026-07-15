@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Any, Dict, Optional, List
 import json
@@ -263,106 +264,113 @@ def refine_query_with_gemini(user_input: str) -> str:
     return user_input
 
 @router.post("/api/chat")
-def chatbot_endpoint(req: ChatRequest) -> dict:
+def chatbot_endpoint(req: ChatRequest):
     clean_input = DataMaskingMiddleware.redact_pii(req.message)
     write_log("CHATBOT_AGENT", f"Received message: '{clean_input}'")
     
-    if req.message == "load_basic_policies_rag":
-        welcome_msg = (
-            "✨Welcome to the PES University Family! ✨\n\n"
-            "On behalf of the entire community, a warm and hearty welcome to PES University (PESU)! We are absolutely thrilled to have you join our esteemed faculty.\n\n"
-            "At PESU, we believe that our teachers are the catalysts for transformation, innovation, and academic excellence. This executive brief is designed to help you seamlessly transition into your new role, understanding our shared values, operational expectations, and the world-class research ecosystem available at your fingertips.\n\n"
-            "---\n\n"
-            "### 🛡️ Our Core Values\n"
-            "* **Academic Excellence & Integrity**: We uphold the highest academic standards and expect our faculty to foster an environment of honesty, curiosity, and intellectual rigor.\n"
-            "* **Focus on Discovery**: We empower our scholars and educators to focus on high-quality discovery, innovative problem-solving, and impactful academic output.\n"
-            "* **Collaboration & Connectivity**: We believe in breaking down silos. Our faculty members work collaboratively across departments and campuses to drive interdisciplinary success.\n\n"
-            "---\n\n"
-            "### 🏫 Working Expectations & Campus-Wide Support\n"
-            "To help you balance teaching excellence with cutting-edge research, PESU provides comprehensive, coordinated support across our campuses:\n\n"
-            "* **Dual-Campus Synergy** 📍: You have full access to research support, administrators, seminar updates, and networking initiatives across both the Ring Road (RR) Campus and the Electronic City (EC) Campus.\n"
-            "* **Centralized Resource Hub** 📚: Easily access vital information through our centralized portals, including:\n"
-            "  * Institutional Research Policies\n"
-            "  * Funding and Grant Pathways\n"
-            "  * Publication Support\n"
-            "  * Patent-related Guidance and Filing Services\n"
-            "* **Professional Development** 💡: Participate in regular seminars, workshops, and departmental exchange programs to continuously elevate your pedagogical and research skills.\n\n"
-            "---\n\n"
-            "### 🔬 Equipment Reservation & Research Code of Conduct\n"
-            "PESU houses state-of-the-art research infrastructure. To ensure fair, safe, and efficient utilization of these resources, we ask all faculty members to adhere to the following guidelines:\n\n"
-            "* **State-of-the-Art Instruments**: Access advanced testing and analysis equipment, such as the FTIR Spectrometer (Fourier Transform Infrared Spectroscopy) for material characterization, polymer analysis, and pharmaceutical research.\n"
-            "* **Reservation Protocol** 📝:\n"
-            "  1. Download the official booking form from the Scholar Services portal.\n"
-            "  2. Fill in your research/class details.\n"
-            "  3. Submit the form directly to the respective Facility Coordinator before usage.\n"
-            "* **Lab Ethics & Safety** 🛡️: Please guide your students to treat all laboratories and instruments with care, strictly adhering to safety protocols and leaving workspaces clean for the next user.\n\n"
-            "---\n\n"
-            "### ⚙️ Complete Your Profile\n"
-            "* **Setup Settings** ⚙️: Please navigate to the **Settings** tab to verify your information, fill in your employee details, and complete your profile setup.\n\n"
-            "---\n\n"
-            "### 📞 Need Assistance?\n"
-            "We are here to support you every step of the way!\n"
-            "* For curriculum and classroom support, please reach out to your Department Chairperson.\n"
-            "* For research, patents, or equipment booking, connect directly with our Research Administrators on either campus.\n\n"
-            "Once again, welcome aboard! We look forward to watching you inspire the next generation of leaders at PES University. Let’s create, discover, and excel together! 🚀🎓"
-        )
-        return {"response": welcome_msg}
-    else:
-        # 1. Refine query before calling Pinecone RAG search
-        refined_query = refine_query_with_gemini(clean_input)
-        
-        # 2. Query Pinecone database to get context
-        from app.tools.pinecone_rag import PineconeRAGService
-        pinecone_service = PineconeRAGService()
-        rules_context = pinecone_service.query_rules(refined_query)
-        
-        # 2. Call Gemini model using API Key
-        from dotenv import load_dotenv
-        load_dotenv(override=True)
-        api_key = os.getenv("GEMINI_API_KEY", "").strip()
-        
-        prompt = (
-            f"You are a helpful PESU AI. Use the following Pinecone RAG context to answer the user's query.\n"
-            f"Make sure to use relevant emojis where appropriate in your response to make it engaging and friendly.\n"
-            f"If you answer using the retrieved context guidelines, always append '[Source: Pinecone Database]' to make it clear that the response refers to retrieved records.\n"
-            f"If the context does not contain enough info to answer the query, reply to the best of your knowledge, specify that it is general info, and do not append the citation.\n\n"
-            f"Context:\n{rules_context}\n\n"
-            f"User Query: {clean_input}\n\n"
-            f"Response:"
-        )
-    
-    answer = None
-    if api_key:
-        try:
-            import requests
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
-            headers = {"Content-Type": "application/json"}
-            data = {
-                "contents": [{"parts": [{"text": prompt}]}]
-            }
-            import time
-            retries = 3
-            backoff = 0.5
-            for attempt in range(retries):
-                response = requests.post(url, headers=headers, json=data, timeout=60.0)
-                if response.status_code == 200:
-                    res_json = response.json()
-                    answer = res_json["candidates"][0]["content"]["parts"][0]["text"]
-                    break
-                elif response.status_code == 503 and attempt < retries - 1:
-                    time.sleep(backoff)
-                    backoff *= 2
-                else:
-                    write_log("CHATBOT_ERROR", f"Gemini API returned status code {response.status_code}: {response.text}")
-                    break
-        except Exception as e:
-            write_log("CHATBOT_ERROR", f"Failed to contact Gemini API: {str(e)}")
+    async def event_generator():
+        if req.message == "load_basic_policies_rag":
+            welcome_msg = (
+                "✨Welcome to the PES University Family! ✨\n\n"
+                "On behalf of the entire community, a warm and hearty welcome to PES University (PESU)! We are absolutely thrilled to have you join our esteemed faculty.\n\n"
+                "At PESU, we believe that our teachers are the catalysts for transformation, innovation, and academic excellence. This executive brief is designed to help you seamlessly transition into your new role, understanding our shared values, operational expectations, and the world-class research ecosystem available at your fingertips.\n\n"
+                "---\n\n"
+                "### 🛡️ Our Core Values\n"
+                "* **Academic Excellence & Integrity**: We uphold the highest academic standards and expect our faculty to foster an environment of honesty, curiosity, and intellectual rigor.\n"
+                "* **Focus on Discovery**: We empower our scholars and educators to focus on high-quality discovery, innovative problem-solving, and impactful academic output.\n"
+                "* **Collaboration & Connectivity**: We believe in breaking down silos. Our faculty members work collaboratively across departments and campuses to drive interdisciplinary success.\n\n"
+                "---\n\n"
+                "### 🏫 Working Expectations & Campus-Wide Support\n"
+                "To help you balance teaching excellence with cutting-edge research, PESU provides comprehensive, coordinated support across our campuses:\n\n"
+                "* **Dual-Campus Synergy** 📍: You have full access to research support, administrators, seminar updates, and networking initiatives across both the Ring Road (RR) Campus and the Electronic City (EC) Campus.\n"
+                "* **Centralized Resource Hub** 📚: Easily access vital information through our centralized portals, including:\n"
+                "  * Institutional Research Policies\n"
+                "  * Funding and Grant Pathways\n"
+                "  * Publication Support\n"
+                "  * Patent-related Guidance and Filing Services\n"
+                "* **Professional Development** 💡: Participate in regular seminars, workshops, and departmental exchange programs to continuously elevate your pedagogical and research skills.\n\n"
+                "---\n\n"
+                "### 🔬 Equipment Reservation & Research Code of Conduct\n"
+                "PESU houses state-of-the-art research infrastructure. To ensure fair, safe, and efficient utilization of these resources, we ask all faculty members to adhere to the following guidelines:\n\n"
+                "* **State-of-the-Art Instruments**: Access advanced testing and analysis equipment, such as the FTIR Spectrometer (Fourier Transform Infrared Spectroscopy) for material characterization, polymer analysis, and pharmaceutical research.\n"
+                "* **Reservation Protocol** 📝:\n"
+                "  1. Download the official booking form from the Scholar Services portal.\n"
+                "  2. Fill in your research/class details.\n"
+                "  3. Submit the form directly to the respective Facility Coordinator before usage.\n"
+                "* **Lab Ethics & Safety** 🛡️: Please guide your students to treat all laboratories and instruments with care, strictly adhering to safety protocols and leaving workspaces clean for the next user.\n\n"
+                "---\n\n"
+                "### ⚙️ Complete Your Profile\n"
+                "* **Setup Settings** ⚙️: Please navigate to the **Settings** tab to verify your information, fill in your employee details, and complete your profile setup.\n\n"
+                "---\n\n"
+                "### 📞 Need Assistance?\n"
+                "We are here to support you every step of the way!\n"
+                "* For curriculum and classroom support, please reach out to your Department Chairperson.\n"
+                "* For research, patents, or equipment booking, connect directly with our Research Administrators on either campus.\n\n"
+                "Once again, welcome aboard! We look forward to watching you inspire the next generation of leaders at PES University. Let’s create, discover, and excel together! 🚀🎓"
+            )
+            yield welcome_msg
+        else:
+            # 1. Refine query before calling Pinecone RAG search
+            refined_query = refine_query_with_gemini(clean_input)
+            
+            # 2. Query Pinecone database to get context
+            from app.tools.pinecone_rag import PineconeRAGService
+            pinecone_service = PineconeRAGService()
+            rules_context = pinecone_service.query_rules(refined_query)
+            
+            # 3. Call Gemini model using API Key
+            from dotenv import load_dotenv
+            load_dotenv(override=True)
+            api_key = os.getenv("GEMINI_API_KEY", "").strip()
+            
+            prompt = (
+                f"You are a helpful PESU AI. Use the following Pinecone RAG context to answer the user's query.\n"
+                f"Make sure to use relevant emojis where appropriate in your response to make it engaging and friendly.\n"
+                f"If you answer using the retrieved context guidelines, always append '[Source: Pinecone Database]' to make it clear that the response refers to retrieved records.\n"
+                f"If the context does not contain enough info to answer the query, reply to the best of your knowledge, specify that it is general info, and do not append the citation.\n\n"
+                f"Context:\n{rules_context}\n\n"
+                f"User Query: {clean_input}\n\n"
+                f"Response:"
+            )
+            
+            streamed_any = False
+            if api_key:
+                try:
+                    import httpx
+                    import asyncio
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?key={api_key}&alt=sse"
+                    headers = {"Content-Type": "application/json"}
+                    data = {
+                        "contents": [{"parts": [{"text": prompt}]}]
+                    }
+                    async with httpx.AsyncClient() as client:
+                        async with client.stream("POST", url, headers=headers, json=data, timeout=60.0) as response:
+                            if response.status_code == 200:
+                                async for line in response.aiter_lines():
+                                    if line.startswith("data: "):
+                                        try:
+                                            chunk_data = json.loads(line[6:])
+                                            text_chunk = chunk_data["candidates"][0]["content"]["parts"][0]["text"]
+                                            if text_chunk:
+                                                streamed_any = True
+                                                for char in text_chunk:
+                                                    yield char
+                                                    await asyncio.sleep(0.001)
+                                        except Exception:
+                                            pass
+                            else:
+                                write_log("CHATBOT_ERROR", f"Gemini API returned status code {response.status_code}")
+                except Exception as e:
+                    write_log("CHATBOT_ERROR", f"Failed to contact Gemini API: {str(e)}")
+            
+            if not streamed_any:
+                fallback_msg = f"[RAG Rules Context] Retrieved Rules:\n{rules_context}\n\n(Please check that GEMINI_API_KEY in .env is valid)"
+                import asyncio
+                for char in fallback_msg:
+                    yield char
+                    await asyncio.sleep(0.001)
 
-    if not answer:
-        # Fallback if Gemini key is invalid/missing or API request failed/timed out
-        answer = f"[RAG Rules Context] Retrieved Rules:\n{rules_context}\n\n(Please check that GEMINI_API_KEY in .env is valid)"
-    
-    return {"response": answer}
+    return StreamingResponse(event_generator(), media_type="text/plain")
 
 def send_welcome_email_task(email: str, username: str, name: str, password: str):
     from app.app_utils.email import send_email
