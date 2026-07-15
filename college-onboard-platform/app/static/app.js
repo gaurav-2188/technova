@@ -729,6 +729,28 @@ hrAddTeacherForm.addEventListener('submit', async (e) => {
         employee_id: document.getElementById('add-empid').value.trim()
     };
 
+    const tempUsername = payload.email;
+    const originalTeachers = { ...systemState.teachers };
+    systemState.teachers[tempUsername] = {
+        name: payload.name,
+        email: payload.email,
+        department: payload.department,
+        designation: payload.designation,
+        username: tempUsername,
+        employee_id: payload.employee_id,
+        documents: [],
+        document_statuses: {},
+        document_paths: {},
+        seating_info: 'Not Allotted',
+        current_stage: 'document_submission',
+        onboarding_status_message: 'Registered, awaiting document submission'
+    };
+
+    // Optimistic Update
+    updateDashboardView();
+    hrAddTeacherForm.reset();
+    switchTab('hr-teachers-list');
+
     try {
         const res = await fetch('/api/action', {
             method: 'POST',
@@ -736,16 +758,19 @@ hrAddTeacherForm.addEventListener('submit', async (e) => {
             body: JSON.stringify({ action: 'add_teacher', payload })
         });
 
-        if (res.ok) {
-            alert('Teacher profile successfully created!');
-            hrAddTeacherForm.reset();
-            switchTab('hr-teachers-list');
-            syncStateData();
-        } else {
+        if (!res.ok) {
+            // Rollback
+            systemState.teachers = originalTeachers;
+            updateDashboardView();
             const err = await res.json();
             alert(`Error: ${err.detail}`);
+        } else {
+            syncStateData();
         }
     } catch (e) {
+        // Rollback
+        systemState.teachers = originalTeachers;
+        updateDashboardView();
         alert('Server communication error.');
     }
 });
@@ -780,6 +805,18 @@ window.viewDoc = function(docName) {
 };
 
 window.verifyDoc = async function(username, docName, docType, approved) {
+    const teacher = systemState.teachers[username];
+    if (!teacher) return;
+
+    // Save original state
+    const originalStatus = { ...teacher.document_statuses };
+    const originalStage = teacher.current_stage;
+    const originalMessage = teacher.onboarding_status_message;
+
+    // Optimistic Update
+    teacher.document_statuses[docType] = approved ? 'approved' : 'rejected';
+    updateDashboardView();
+
     try {
         const res = await fetch('/api/action', {
             method: 'POST',
@@ -789,14 +826,22 @@ window.verifyDoc = async function(username, docName, docType, approved) {
                 payload: { username, document_name: docName, doc_type: docType, approved: approved }
             })
         });
-        if (res.ok) {
-            alert(approved ? 'Document approved successfully' : 'Document rejected successfully');
-            syncStateData();
-        } else {
+        if (!res.ok) {
+            // Rollback
+            teacher.document_statuses = originalStatus;
+            teacher.current_stage = originalStage;
+            teacher.onboarding_status_message = originalMessage;
+            updateDashboardView();
             alert('Failed to evaluate document');
+        } else {
+            syncStateData();
         }
     } catch(err) {
-        console.error(err);
+        // Rollback
+        teacher.document_statuses = originalStatus;
+        teacher.current_stage = originalStage;
+        teacher.onboarding_status_message = originalMessage;
+        updateDashboardView();
         alert('Server communication error.');
     }
 };
@@ -824,6 +869,17 @@ document.getElementById('admin-edit-announcement-form').addEventListener('submit
     const id = parseInt(document.getElementById('edit-ann-id').value);
     const newTitle = document.getElementById('edit-ann-title').value;
     const newContent = document.getElementById('edit-ann-content').value;
+
+    const originalAnnouncements = [...systemState.announcements];
+    const annIdx = systemState.announcements.findIndex(ann => ann.id === id);
+    if (annIdx !== -1) {
+        systemState.announcements[annIdx].title = newTitle;
+        systemState.announcements[annIdx].content = newContent;
+    }
+
+    // Optimistic Update
+    updateDashboardView();
+    document.getElementById('admin-edit-announcement-modal').classList.add('hidden');
     
     try {
         const res = await fetch('/api/action', {
@@ -834,15 +890,18 @@ document.getElementById('admin-edit-announcement-form').addEventListener('submit
                 payload: { id: id, title: newTitle, content: newContent }
             })
         });
-        if (res.ok) {
-            alert('Announcement updated successfully!');
-            document.getElementById('admin-edit-announcement-modal').classList.add('hidden');
-            syncStateData();
-        } else {
+        if (!res.ok) {
+            // Rollback
+            systemState.announcements = originalAnnouncements;
+            updateDashboardView();
             alert('Failed to update announcement.');
+        } else {
+            syncStateData();
         }
     } catch(err) {
-        console.error(err);
+        // Rollback
+        systemState.announcements = originalAnnouncements;
+        updateDashboardView();
         alert('Server communication error.');
     }
 });
@@ -850,6 +909,12 @@ document.getElementById('admin-edit-announcement-form').addEventListener('submit
 window.deleteAnnouncement = async function(id) {
     if (!confirm("Are you sure you want to delete this announcement?")) return;
     
+    const originalAnnouncements = [...systemState.announcements];
+    systemState.announcements = systemState.announcements.filter(ann => ann.id !== id);
+
+    // Optimistic Update
+    updateDashboardView();
+
     try {
         const res = await fetch('/api/action', {
             method: 'POST',
@@ -859,14 +924,18 @@ window.deleteAnnouncement = async function(id) {
                 payload: { id: id }
             })
         });
-        if (res.ok) {
-            alert('Announcement deleted successfully!');
-            syncStateData();
-        } else {
+        if (!res.ok) {
+            // Rollback
+            systemState.announcements = originalAnnouncements;
+            updateDashboardView();
             alert('Failed to delete announcement.');
+        } else {
+            syncStateData();
         }
     } catch(err) {
-        console.error(err);
+        // Rollback
+        systemState.announcements = originalAnnouncements;
+        updateDashboardView();
         alert('Server communication error.');
     }
 };
@@ -909,6 +978,18 @@ hrEditForm.addEventListener('submit', async (e) => {
         employee_id: document.getElementById('edit-empid').value.trim()
     };
 
+    const originalTeacher = { ...systemState.teachers[username] };
+    const originalTeachers = { ...systemState.teachers };
+
+    // Optimistic Update
+    systemState.teachers[username].name = payload.name;
+    systemState.teachers[username].email = payload.email;
+    systemState.teachers[username].department = payload.department;
+    systemState.teachers[username].designation = payload.designation;
+    systemState.teachers[username].employee_id = payload.employee_id;
+    updateDashboardView();
+    editDrawer.classList.add('hidden');
+
     try {
         const res = await fetch('/api/action', {
             method: 'POST',
@@ -916,15 +997,19 @@ hrEditForm.addEventListener('submit', async (e) => {
             body: JSON.stringify({ action: 'update_teacher', payload })
         });
 
-        if (res.ok) {
-            alert('Teacher profile updated!');
-            editDrawer.classList.add('hidden');
-            syncStateData();
-        } else {
+        if (!res.ok) {
+            // Rollback
+            systemState.teachers[username] = originalTeacher;
+            updateDashboardView();
             const err = await res.json();
             alert(`Error: ${err.detail}`);
+        } else {
+            syncStateData();
         }
     } catch (e) {
+        // Rollback
+        systemState.teachers = originalTeachers;
+        updateDashboardView();
         alert('Server communication error.');
     }
 });
@@ -938,6 +1023,13 @@ deleteTeacherBtn.addEventListener('click', async (e) => {
     if (!username) return;
 
     if (confirm(`Are you sure you want to permanently delete the profile for @${username}?`)) {
+        const originalTeachers = { ...systemState.teachers };
+
+        // Optimistic Update
+        delete systemState.teachers[username];
+        updateDashboardView();
+        editDrawer.classList.add('hidden');
+
         try {
             const res = await fetch('/api/action', {
                 method: 'POST',
@@ -948,15 +1040,19 @@ deleteTeacherBtn.addEventListener('click', async (e) => {
                 })
             });
 
-            if (res.ok) {
-                alert('Teacher profile successfully deleted.');
-                editDrawer.classList.add('hidden');
-                syncStateData();
-            } else {
+            if (!res.ok) {
+                // Rollback
+                systemState.teachers = originalTeachers;
+                updateDashboardView();
                 const err = await res.json();
                 alert(`Error: ${err.detail}`);
+            } else {
+                syncStateData();
             }
         } catch (e) {
+            // Rollback
+            systemState.teachers = originalTeachers;
+            updateDashboardView();
             alert('Server communication error.');
         }
     }
@@ -1093,9 +1189,6 @@ if (fileTet) {
 
 if (batchSubmitBtn) {
     batchSubmitBtn.addEventListener('click', async () => {
-        batchSubmitBtn.disabled = true;
-        batchSubmitBtn.innerText = 'Uploading...';
-
         const filesToUpload = [];
         if (fileAadhaar && fileAadhaar.files && fileAadhaar.files.length > 0) {
             filesToUpload.push({ file: fileAadhaar.files[0], type: 'aadhaar_card' });
@@ -1107,46 +1200,69 @@ if (batchSubmitBtn) {
             filesToUpload.push({ file: fileTet.files[0], type: 'teacher_eligibility_test' });
         }
 
-        try {
-            let success = true;
-            for (const item of filesToUpload) {
-                const formData = new FormData();
-                formData.append("file", item.file);
-                formData.append("doc_type", item.type);
-                formData.append("username", currentUser);
+        if (filesToUpload.length === 0) return;
 
-                const res = await fetch('/api/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-                if (!res.ok) success = false;
+        // Save original state for rollback
+        const originalTeacher = JSON.parse(JSON.stringify(systemState.teachers[currentUser]));
+
+        // Optimistic Update
+        const t = systemState.teachers[currentUser];
+        if (!t.documents) t.documents = [];
+        if (!t.document_statuses) t.document_statuses = {};
+        if (!t.document_paths) t.document_paths = {};
+
+        filesToUpload.forEach(item => {
+            if (!t.documents.includes(item.file.name)) {
+                t.documents.push(item.file.name);
             }
+            t.document_statuses[item.type] = 'pending';
+            t.document_paths[item.type] = item.file.name;
+        });
+        t.onboarding_status_message = 'Pending verification by HR';
+        
+        // Re-render UI immediately
+        updateDashboardView();
 
-            if (success) {
-                // Clear the input fields so they don't count as "newly staged" anymore
-                if (fileAadhaar) fileAadhaar.value = '';
-                if (fileAppointment) fileAppointment.value = '';
-                if (fileTet) fileTet.value = '';
-                
-                // Change UI state immediately in the profile page
-                const statusVal = document.getElementById('onboarding-status-val');
-                const statusContainer = document.getElementById('onboarding-status-container');
-                if (statusVal && statusContainer) {
-                    statusVal.innerText = 'Pending verification by HR';
-                    statusContainer.style.border = '1px solid rgba(210, 153, 34, 0.3)';
-                    statusContainer.style.background = 'rgba(210, 153, 34, 0.02)';
+        // Clear the input fields so they don't count as "newly staged" anymore
+        if (fileAadhaar) fileAadhaar.value = '';
+        if (fileAppointment) fileAppointment.value = '';
+        if (fileTet) fileTet.value = '';
+        updateSubmitButtonState();
+
+        // Background Upload
+        (async () => {
+            try {
+                let success = true;
+                for (const item of filesToUpload) {
+                    const formData = new FormData();
+                    formData.append("file", item.file);
+                    formData.append("doc_type", item.type);
+                    formData.append("username", currentUser);
+
+                    const res = await fetch('/api/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    if (!res.ok) success = false;
                 }
-                
-                await syncStateData();
-                alert('Documents submitted successfully!');
-            } else {
-                alert('One or more document uploads failed.');
+
+                if (success) {
+                    syncStateData();
+                } else {
+                    // Rollback
+                    systemState.teachers[currentUser] = originalTeacher;
+                    updateDashboardView();
+                    alert('One or more document uploads failed.');
+                    updateSubmitButtonState();
+                }
+            } catch (e) {
+                // Rollback
+                systemState.teachers[currentUser] = originalTeacher;
+                updateDashboardView();
+                alert('Server communication error during document upload.');
                 updateSubmitButtonState();
             }
-        } catch (e) {
-            alert('Server communication error.');
-            updateSubmitButtonState();
-        }
+        })();
     });
 }
 
@@ -1157,9 +1273,18 @@ window.allocateSeating = async function(username) {
         alert('Please enter seating coordinates.');
         return;
     }
+    const newVal = input.value.trim();
+    const originalSeating = systemState.teachers[username].seating_info;
+
+    // Optimistic Update
+    systemState.teachers[username].seating_info = newVal;
+    editingSeating[username] = false; // Disable editing mode immediately
+    if (input) input.blur();
+    updateDashboardView();
+
     const payload = {
         username: username,
-        seating_info: input.value.trim()
+        seating_info: newVal
     };
     try {
         const res = await fetch('/api/action', {
@@ -1167,15 +1292,20 @@ window.allocateSeating = async function(username) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'allot_seat', payload })
         });
-        if (res.ok) {
-            alert('Seating coordinates successfully allotted!');
-            editingSeating[username] = false; // Disable editing mode on success
-            if (input) input.blur();
-            syncStateData();
-        } else {
+        if (!res.ok) {
+            // Rollback
+            systemState.teachers[username].seating_info = originalSeating;
+            editingSeating[username] = true;
+            updateDashboardView();
             alert('Seat allotment failed.');
+        } else {
+            syncStateData();
         }
     } catch (e) {
+        // Rollback
+        systemState.teachers[username].seating_info = originalSeating;
+        editingSeating[username] = true;
+        updateDashboardView();
         alert('Server communication error.');
     }
 };
@@ -1195,20 +1325,41 @@ adminAnnouncementForm.addEventListener('submit', async (e) => {
         sender: 'Admin'
     };
 
+    const tempId = Date.now();
+    const tempAnn = {
+        id: tempId,
+        title: payload.title,
+        content: payload.content,
+        sender: payload.sender,
+        date: new Date().toISOString().split('T')[0]
+    };
+
+    // Save original state for rollback
+    const originalAnnouncements = [...systemState.announcements];
+
+    // Optimistic Update
+    systemState.announcements.push(tempAnn);
+    updateDashboardView();
+    adminAnnouncementForm.reset();
+
     try {
         const res = await fetch('/api/action', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'add_announcement', payload })
         });
-        if (res.ok) {
-            alert('Announcement successfully broadcast!');
-            adminAnnouncementForm.reset();
-            syncStateData();
-        } else {
+        if (!res.ok) {
+            // Rollback
+            systemState.announcements = originalAnnouncements;
+            updateDashboardView();
             alert('Announcement broadcast failed.');
+        } else {
+            syncStateData();
         }
     } catch (e) {
+        // Rollback
+        systemState.announcements = originalAnnouncements;
+        updateDashboardView();
         alert('Server communication error.');
     }
 });
