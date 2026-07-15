@@ -20,283 +20,68 @@
       "content": "Backlog Room Allotment Session-1 published for all undergraduate classes.",
       "date": "2026-07-02",
       "sender": "Admin"
-    },
-    {
-      "id": 4,
-      "title": "Teacher Meeting",
-      "content": "Results announcement",
-      "date": "2026-07-02",
-      "sender": "Admin"
     }
   ],
   "teachers": {
     "teacher": {
       "name": "Dr. Jane Doe",
-      "email": "1321harikrishna@gmail.com",
+      "email": "jane.doe@pes.edu",
+      "department": "Computer Science & Engineering",
+      "designation": "Professor",
       "username": "teacher",
       "password": "password",
-      "seating_info": "room 320, desk B",
-      "leave_balance": 30,
-      "credentials_sent": true,
-      "active_stage": "Credentials-Sent",
-      "documents": [
-        "file-example_PDF_500_kB.pdf",
-        "file-sample_150kB.pdf",
-        "file-example_PDF_1MB.pdf"
-      ],
-      "policy_brief": "[Pinecone Search (Simulation)] RETRIEVED RULES CONTEXT:\n- Data Input (PII Scrubbed): file-example_PDF_1MB.pdf\n- Joining guidelines: Submit original verification documents within 30 days.\n- Campus ethics: Absolute professionalism in research and teaching duties.",
-      "department": "crime branch",
-      "designation": "police",
-      "verified_documents": [
-        "file-example_PDF_500_kB.pdf",
-        "file-sample_150kB.pdf",
-        "file-example_PDF_1MB.pdf"
-      ],
-      "candidate_name": "Dr. Jane Doe",
-      "confirmation_email_sent": false,
-      "manager_interview_scheduled": false,
-      "chairperson_notified": false,
-      "final_approval_flag": false,
-      "allotment_criteria": {},
-      "it_notified": false,
-      "admin_notified": false,
-      "leaves": [],
-      "document_statuses": {
-        "aadhaar_card": "approved",
-        "appointment_letter": "approved",
-        "teacher_eligibility_test": "approved"
-      },
-      "pending_tally": 0,
-      "current_stage": "policy_review",
-      "document_paths": {
-        "aadhaar_card": "file-example_PDF_500_kB.pdf",
-        "appointment_letter": "file-sample_150kB.pdf",
-        "teacher_eligibility_test": "file-example_PDF_1MB.pdf"
-      },
-      "employee_id": "PES1TE25CS183",
-      "onboarding_status_message": "Verified by HR, details forwarded for teacher onboarding"
-    },
-    "tgowrinandan@gmail.com": {
-      "name": "nandan",
-      "email": "tgowrinandan@gmail.com",
-      "department": "Computer science and engineering",
-      "designation": "Assistant Professor",
-      "username": "tgowrinandan@gmail.com",
-      "password": "GHvGoo9WUoyqgA",
-      "employee_id": "PESUG25CS156",
-      "seating_info": "Room 39, desk D",
+      "seating_info": "Room 405, Desk C",
       "attendance": [
         {
-          "date": "2026-06-10",
+          "date": "2026-06-15",
           "status": "Absent",
-          "reason": "Personal Leave"
+          "reason": "Sick Leave"
         },
         {
-          "date": "2026-06-20",
+          "date": "2026-06-28",
           "status": "Absent",
-          "reason": "Medical Leave"
+          "reason": "Casual Leave"
         }
       ],
       "documents": [
-        "file-example_PDF_1MB.pdf",
-        "file-sample_150kB.pdf",
-        "B.Tech-CSE.pdf"
+        "PhD_Cert.pdf",
+        "Joining_Letter.pdf"
       ],
       "projects": [],
       "schedule": [
         {
-          "day": "Tuesday",
-          "time": "10:00 AM - 11:30 AM",
-          "class": "CSE-C",
-          "subject": "Database Systems"
+          "day": "Monday",
+          "time": "09:00 AM - 10:30 AM",
+          "class": "CSE-A",
+          "subject": "Advanced Algorithms"
         },
         {
-          "day": "Thursday",
+          "day": "Wednesday",
+          "time": "11:00 AM - 12:30 PM",
+          "class": "CSE-B",
+          "subject": "Machine Learning"
+        },
+        {
+          "day": "Friday",
           "time": "02:00 PM - 03:30 PM",
-          "class": "CSE-C",
-          "subject": "Database Systems"
+          "class": "CSE-A",
+          "subject": "Advanced Algorithms"
         }
       ],
-      "policy_brief": "[Pinecone Search (Simulation)] RETRIEVED RULES CONTEXT:\n- Data Input (PII Scrubbed): B.Tech-CSE.pdf\n- Joining guidelines: Submit original verification documents within 30 days.\n- Campus ethics: Absolute professionalism in research and teaching duties.",
-      "leave_balance": 30,
-      "onboarding_status_message": "Verified by HR, details forwarded for teacher onboarding",
+      "policy_brief": "[Pinecone Search @ production] RETRIEVED RULES CONTEXT:\n- Joining guidelines: Submit original verification documents within 30 days.\n- Campus ethics: Absolute professionalism in research and teaching duties.",
+      "leave_balance": 28,
+      "onboarding_status_message": "Please upload documents in document upload tab",
       "document_statuses": {
-        "aadhaar_card": "approved",
-        "appointment_letter": "approved",
-        "teacher_eligibility_test": "approved"
+        "aadhaar_card": "unuploaded",
+        "appointment_letter": "unuploaded",
+        "teacher_eligibility_test": "unuploaded"
       },
       "document_paths": {
-        "aadhaar_card": "file-example_PDF_1MB.pdf",
-        "appointment_letter": "file-sample_150kB.pdf",
-        "teacher_eligibility_test": "B.Tech-CSE.pdf"
+        "aadhaar_card": "",
+        "appointment_letter": "",
+        "teacher_eligibility_test": ""
       },
-      "candidate_name": "Dr. Jane Doe",
-      "active_stage": "START",
-      "confirmation_email_sent": false,
-      "credentials_sent": false,
-      "manager_interview_scheduled": false,
-      "chairperson_notified": false,
-      "final_approval_flag": false,
-      "allotment_criteria": {},
-      "it_notified": false,
-      "admin_notified": false,
-      "leaves": [],
-      "pending_tally": 0,
-      "current_stage": "policy_review",
-      "verified_documents": [
-        "file-example_PDF_1MB.pdf",
-        "file-sample_150kB.pdf",
-        "B.Tech-CSE.pdf"
-      ]
-    },
-    "insidereverything123@gmail.com": {
-      "name": "Gaurav Omprakash",
-      "email": "insidereverything123@gmail.com",
-      "department": "Computer science and engineering",
-      "designation": "Professor",
-      "username": "insidereverything123@gmail.com",
-      "password": "pOit5L06LpkBpA",
-      "employee_id": "PESUG25CS1564",
-      "seating_info": "Room 432, Desk C",
-      "attendance": [
-        {
-          "date": "2026-06-10",
-          "status": "Absent",
-          "reason": "Personal Leave"
-        },
-        {
-          "date": "2026-06-20",
-          "status": "Absent",
-          "reason": "Medical Leave"
-        }
-      ],
-      "documents": [
-        "file-example_PDF_500_kB.pdf",
-        "file-sample_150kB.pdf",
-        "file-example_PDF_1MB.pdf"
-      ],
-      "projects": [],
-      "schedule": [
-        {
-          "day": "Tuesday",
-          "time": "10:00 AM - 11:30 AM",
-          "class": "CSE-C",
-          "subject": "Database Systems"
-        },
-        {
-          "day": "Thursday",
-          "time": "02:00 PM - 03:30 PM",
-          "class": "CSE-C",
-          "subject": "Database Systems"
-        }
-      ],
-      "policy_brief": "[Pinecone Search (Simulation)] RETRIEVED RULES CONTEXT:\n- Data Input (PII Scrubbed): file-example_PDF_1MB.pdf\n- Joining guidelines: Submit original verification documents within 30 days.\n- Campus ethics: Absolute professionalism in research and teaching duties.",
-      "leave_balance": 30,
-      "onboarding_status_message": "Verified by HR, details forwarded for teacher onboarding",
-      "document_statuses": {
-        "aadhaar_card": "approved",
-        "appointment_letter": "approved",
-        "teacher_eligibility_test": "approved"
-      },
-      "document_paths": {
-        "aadhaar_card": "file-example_PDF_500_kB.pdf",
-        "appointment_letter": "file-sample_150kB.pdf",
-        "teacher_eligibility_test": "file-example_PDF_1MB.pdf"
-      },
-      "candidate_name": "Dr. Jane Doe",
-      "active_stage": "START",
-      "confirmation_email_sent": false,
-      "credentials_sent": false,
-      "manager_interview_scheduled": false,
-      "chairperson_notified": true,
-      "final_approval_flag": false,
-      "allotment_criteria": {},
-      "it_notified": false,
-      "admin_notified": false,
-      "leaves": [],
-      "pending_tally": 0,
-      "current_stage": "policy_review",
-      "verified_documents": [
-        "file-example_PDF_500_kB.pdf",
-        "file-sample_150kB.pdf",
-        "file-example_PDF_1MB.pdf"
-      ]
-    },
-    "gauravb2188@gmail.com": {
-      "name": "gaurav gaurav",
-      "email": "gauravb2188@gmail.com",
-      "department": "Computer science and engineering",
-      "designation": "Assistant Professor",
-      "username": "gauravb2188@gmail.com",
-      "password": "yOMytBsE-s5vzQ",
-      "employee_id": "PESUG25CS156",
-      "seating_info": "room 32, desk B",
-      "attendance": [
-        {
-          "date": "2026-06-10",
-          "status": "Absent",
-          "reason": "Personal Leave"
-        },
-        {
-          "date": "2026-06-20",
-          "status": "Absent",
-          "reason": "Medical Leave"
-        }
-      ],
-      "documents": [
-        "file-example_PDF_1MB.pdf",
-        "file-example_PDF_500_kB.pdf",
-        "file-sample_150kB.pdf"
-      ],
-      "projects": [],
-      "schedule": [
-        {
-          "day": "Tuesday",
-          "time": "10:00 AM - 11:30 AM",
-          "class": "CSE-C",
-          "subject": "Database Systems"
-        },
-        {
-          "day": "Thursday",
-          "time": "02:00 PM - 03:30 PM",
-          "class": "CSE-C",
-          "subject": "Database Systems"
-        }
-      ],
-      "policy_brief": "[Pinecone Index: gemini-rag-3072] RETRIEVED REAL-TIME RULES:\n- PES University100 Feet Ring Road BSK III Stage, Bengaluru \u2013 560085Public Self DisclosureSr. No. Title Subtitle Links on Website\n1 About HEI\nAbout Us - Overview Link: http://www.pes.edu/UGC-PSD/1.1Act and Statutes or MoA Link: http://www.pes.edu/UGC-PSD/1.2Institutional Development PlanLink: http://www.pes.edu/UGC-PSD/1.3Constituent Units/ Affiliated Colleges, Affiliating University (In case of Colleges) Off-Campus/Off-Shore Campus/Learning Support Centers Under ODL Mode (Wherever Applicable) Link: http://www.pes.edu/UGC-PSD/1.4\nAccreditation/ Ranking Status (NAAC, NBA, NIRF)Link: http://www.pes.edu/UGC-PSD/1.5Recognition / Approval (2(f), 12B, etc. as applicable)Link: http://www.pes.edu/UGC-PSD/1.6Annual Reports Link: http://www.pes.edu/UGC-PSD/1.7Annual Accounts Including Balance Sheet, Income and Expenditure Account, Receipts and Payments Account Along with Audit ReportLink: http://www.pes.edu/UGC-PSD/1.8\n- 5 ResearchResearch and Development Cell (Including Research and Consultancy Projects, Foreign Collaboration Industry Collaborations)Link: http://www.pes.edu/UGC-PSD/5.1Incubation Centre/Start-Ups/ Entrepreneurship CellLink: http://www.pes.edu/UGC-PSD/5.2Central Facilities Link: http://www.pes.edu/UGC-PSD/5.3Sr. No. Title Subtitle Links on Website\n6 Student Life\n- Sponsoring Body Details, if any Link: http://www.pes.edu/UGC-PSD/1.9Sr. No. Title Subtitle Links on Website\n2 Administration (Profiles with Photographs and Contact Details)",
-      "leave_balance": 30,
-      "onboarding_status_message": "Verified by HR, details forwarded for teacher onboarding",
-      "document_statuses": {
-        "aadhaar_card": "approved",
-        "appointment_letter": "approved",
-        "teacher_eligibility_test": "approved"
-      },
-      "document_paths": {
-        "aadhaar_card": "https://zymkqhqjlyrlnyycpkab.supabase.co/storage/v1/object/public/documents/gauravb2188@gmail.com/aadhaar_card.pdf",
-        "appointment_letter": "https://zymkqhqjlyrlnyycpkab.supabase.co/storage/v1/object/public/documents/gauravb2188@gmail.com/appointment_letter.pdf",
-        "teacher_eligibility_test": "https://zymkqhqjlyrlnyycpkab.supabase.co/storage/v1/object/public/documents/gauravb2188@gmail.com/teacher_eligibility_test.pdf"
-      },
-      "candidate_name": "Dr. Jane Doe",
-      "active_stage": "START",
-      "confirmation_email_sent": false,
-      "credentials_sent": false,
-      "manager_interview_scheduled": false,
-      "chairperson_notified": true,
-      "final_approval_flag": false,
-      "allotment_criteria": {},
-      "it_notified": true,
-      "admin_notified": true,
-      "leaves": [],
-      "pending_tally": 0,
-      "current_stage": "policy_review",
-      "verified_documents": [
-        "file-example_PDF_1MB.pdf",
-        "file-example_PDF_500_kB.pdf",
-        "file-sample_150kB.pdf"
-      ]
+      "employee_id": ""
     }
-  },
-  "confirmation_email_sent": true,
-  "active_stage": "Credentials-Sent",
-  "credentials_sent": true
+  }
 }

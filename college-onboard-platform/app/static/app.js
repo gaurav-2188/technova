@@ -143,7 +143,57 @@ logoutBtn.addEventListener('click', () => {
     if (fsChatBody) {
         fsChatBody.innerHTML = `
             <div class="chat-message bot">
-                Ask me anything about PES
+                ✨Welcome to the PES University Family! ✨<br>
+                On behalf of the entire community, a warm and hearty welcome to PES University (PESU)! We are absolutely thrilled to have you join our esteemed faculty.<br>
+                <br>
+                At PESU, we believe that our teachers are the catalysts for transformation, innovation, and academic excellence. This executive brief is designed to help you seamlessly transition into your new role, understanding our shared values, operational expectations, and the world-class research ecosystem available at your fingertips.<br>
+                <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 15px 0;">
+                <h3>🛡️ Our Core Values</h3>
+                <ul style="margin-left: 20px; margin-top: 10px; margin-bottom: 10px; list-style-type: disc;">
+                    <li style="margin-bottom: 8px;"><strong>Academic Excellence &amp; Integrity:</strong> We uphold the highest academic standards and expect our faculty to foster an environment of honesty, curiosity, and intellectual rigor.</li>
+                    <li style="margin-bottom: 8px;"><strong>Focus on Discovery:</strong> We empower our scholars and educators to focus on high-quality discovery, innovative problem-solving, and impactful academic output.</li>
+                    <li style="margin-bottom: 8px;"><strong>Collaboration &amp; Connectivity:</strong> We believe in breaking down silos. Our faculty members work collaboratively across departments and campuses to drive interdisciplinary success.</li>
+                </ul>
+                <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 15px 0;">
+                <h3>🏫 Working Expectations &amp; Campus-Wide Support</h3>
+                To help you balance teaching excellence with cutting-edge research, PESU provides comprehensive, coordinated support across our campuses:<br>
+                <br>
+                <ul style="margin-left: 20px; margin-top: 10px; margin-bottom: 10px; list-style-type: disc;">
+                    <li style="margin-bottom: 8px;"><strong>Dual-Campus Synergy 📍:</strong> You have full access to research support, administrators, seminar updates, and networking initiatives across both the Ring Road (RR) Campus and the Electronic City (EC) Campus.</li>
+                    <li style="margin-bottom: 8px;"><strong>Centralized Resource Hub 📚:</strong> Easily access vital information through our centralized portals, including:
+                        <ul style="margin-left: 20px; margin-top: 5px; list-style-type: circle;">
+                            <li>Institutional Research Policies</li>
+                            <li>Funding and Grant Pathways</li>
+                            <li>Publication Support</li>
+                            <li>Patent-related Guidance and Filing Services</li>
+                        </ul>
+                    </li>
+                    <li style="margin-bottom: 8px;"><strong>Professional Development 💡:</strong> Participate in regular seminars, workshops, and departmental exchange programs to continuously elevate your pedagogical and research skills.</li>
+                </ul>
+                <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 15px 0;">
+                <h3>🔬 Equipment Reservation &amp; Research Code of Conduct</h3>
+                PESU houses state-of-the-art research infrastructure. To ensure fair, safe, and efficient utilization of these resources, we ask all faculty members to adhere to the following guidelines:<br>
+                <br>
+                <ul style="margin-left: 20px; margin-top: 10px; margin-bottom: 10px; list-style-type: disc;">
+                    <li style="margin-bottom: 8px;"><strong>State-of-the-Art Instruments:</strong> Access advanced testing and analysis equipment, such as the FTIR Spectrometer (Fourier Transform Infrared Spectroscopy) for material characterization, polymer analysis, and pharmaceutical research.</li>
+                    <li style="margin-bottom: 8px;"><strong>Reservation Protocol 📝:</strong>
+                        <ol style="margin-left: 20px; margin-top: 5px; list-style-type: decimal;">
+                            <li style="margin-bottom: 4px;">Download the official booking form from the Scholar Services portal.</li>
+                            <li style="margin-bottom: 4px;">Fill in your research/class details.</li>
+                            <li style="margin-bottom: 4px;">Submit the form directly to the respective Facility Coordinator before usage.</li>
+                        </ol>
+                    </li>
+                    <li style="margin-bottom: 8px;"><strong>Lab Ethics &amp; Safety 🛡️:</strong> Please guide your students to treat all laboratories and instruments with care, strictly adhering to safety protocols and leaving workspaces clean for the next user.</li>
+                </ul>
+                <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 15px 0;">
+                <h3>📞 Need Assistance?</h3>
+                We are here to support you every step of the way!<br>
+                <ul style="margin-left: 20px; margin-top: 10px; margin-bottom: 10px; list-style-type: disc;">
+                    <li style="margin-bottom: 4px;">For curriculum and classroom support, please reach out to your Department Chair.</li>
+                    <li style="margin-bottom: 4px;">For research, patents, or equipment booking, connect directly with our Research Administrators on either campus.</li>
+                </ul>
+                <br>
+                Once again, welcome aboard! We look forward to watching you inspire the next generation of leaders at PES University. Let’s create, discover, and excel together! 🚀🎓
             </div>
         `;
     }
@@ -1395,8 +1445,28 @@ async function sendFullscreenChatMessage() {
         const tb = document.getElementById('thinking-bubble');
         if (tb) tb.remove();
 
-        const data = await res.json();
-        appendFullscreenChatBubble('bot', data.response);
+        if (!res.ok) {
+            throw new Error('Network response was not ok');
+        }
+
+        const botBubble = appendFullscreenChatBubble('bot', 'Thinking...');
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let accumulatedResponse = "";
+        let isFirstChunk = true;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            if (isFirstChunk && chunk.length > 0) {
+                botBubble.innerHTML = "";
+                isFirstChunk = false;
+            }
+            accumulatedResponse += chunk;
+            botBubble.innerHTML = formatMarkdown(accumulatedResponse);
+            fullscreenChatBody.scrollTop = fullscreenChatBody.scrollHeight;
+        }
     } catch (e) {
         const tb = document.getElementById('thinking-bubble');
         if (tb) tb.remove();
@@ -1447,8 +1517,12 @@ async function sendHiddenPolicyQuery() {
         const tb = document.getElementById('thinking-bubble');
         if (tb) tb.remove();
 
-        const data = await res.json();
-        appendFullscreenChatBubble('bot', data.response);
+        if (!res.ok) {
+            throw new Error('Network response was not ok');
+        }
+
+        const welcomeText = await res.text();
+        appendFullscreenChatBubble('bot', welcomeText);
     } catch (e) {
         const tb = document.getElementById('thinking-bubble');
         if (tb) tb.remove();
