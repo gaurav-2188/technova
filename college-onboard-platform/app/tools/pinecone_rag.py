@@ -33,7 +33,7 @@ class PineconeRAGService:
                 
                 # 2. Connect to Pinecone and Query index
                 pc = Pinecone(api_key=self.api_key)
-                index_name = "gemini-rag-3072"
+                index_name = "working"
                 idx = pc.Index(index_name)
                 
                 query_res = idx.query(vector=vector, top_k=3, include_metadata=True)
