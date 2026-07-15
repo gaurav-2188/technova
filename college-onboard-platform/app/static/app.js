@@ -228,6 +228,11 @@ function updateDashboardView() {
     const teacher = (systemState.teachers && systemState.teachers[currentUser]) ? systemState.teachers[currentUser] : null;
     const chatbotTab = document.querySelector('.nav-tab[data-tab="candidate-chatbot"]');
     if (teacher && currentRole === 'candidate') {
+        const sidebarEmail = document.getElementById('sidebar-email');
+        const sidebarName = document.getElementById('sidebar-name');
+        if (sidebarEmail) sidebarEmail.innerText = teacher.email;
+        if (sidebarName) sidebarName.innerText = teacher.name;
+
         const currentStage = teacher.current_stage || 'document_collection';
         const hasClickedAlert = localStorage.getItem(`has_clicked_policy_alert_${currentUser}`) === 'true';
         if (currentStage === 'policy_review' && !hasClickedAlert) {
@@ -1434,6 +1439,20 @@ if (changePasswordForm) {
 
 // Update Email Form Submission
 const updateEmailForm = document.getElementById('update-email-form');
+const emailPrefixInput = document.getElementById('settings-email-prefix');
+const emailPreviewText = document.getElementById('email-preview-text');
+
+if (emailPrefixInput && emailPreviewText) {
+    emailPrefixInput.addEventListener('input', () => {
+        const val = emailPrefixInput.value.trim().replace(/@pes\.edu$/i, '');
+        if (val) {
+            emailPreviewText.innerText = `${val}@pes.edu`;
+        } else {
+            emailPreviewText.innerText = 'example@pes.edu';
+        }
+    });
+}
+
 if (updateEmailForm) {
     updateEmailForm.addEventListener('submit', async (e) => {
         e.preventDefault();
