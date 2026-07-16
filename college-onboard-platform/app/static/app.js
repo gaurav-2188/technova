@@ -2535,7 +2535,7 @@ async function renderCalendar() {
     // Fill preceding empty cells
     for (let i = 0; i < firstDayIndex; i++) {
         const emptyCell = document.createElement('div');
-        emptyCell.className = 'calendar-day-cell other-month opacity-20 pointer-events-none h-32 min-h-[120px] w-full border border-neutral-800 overflow-hidden';
+        emptyCell.className = 'calendar-day-cell other-month opacity-20 pointer-events-none w-full aspect-square border border-neutral-800 overflow-hidden';
         daysGrid.appendChild(emptyCell);
     }
 
@@ -2546,7 +2546,7 @@ async function renderCalendar() {
     // Render cells for days
     for (let day = 1; day <= totalDays; day++) {
         const cell = document.createElement('div');
-        cell.className = 'calendar-day-cell h-32 min-h-[120px] w-full p-2 border border-neutral-800/60 rounded flex flex-col justify-between transition-all overflow-hidden';
+        cell.className = 'calendar-day-cell w-full aspect-square p-2 border border-neutral-800/60 rounded relative flex flex-col justify-between transition-all overflow-hidden';
 
         // Check if Sunday
         const dateObj = new Date(calendarYear, calendarMonth, day);
@@ -2910,7 +2910,7 @@ async function renderAdminCalendar() {
     // Fill preceding empty cells
     for (let i = 0; i < firstDayIndex; i++) {
         const emptyCell = document.createElement('div');
-        emptyCell.className = 'calendar-day-cell other-month opacity-20 pointer-events-none h-32 min-h-[120px] w-full border border-neutral-800 overflow-hidden';
+        emptyCell.className = 'calendar-day-cell other-month opacity-20 pointer-events-none w-full aspect-square border border-neutral-800 overflow-hidden';
         daysGrid.appendChild(emptyCell);
     }
 
@@ -2921,7 +2921,7 @@ async function renderAdminCalendar() {
     // Render cells for days
     for (let day = 1; day <= totalDays; day++) {
         const cell = document.createElement('div');
-        cell.className = 'calendar-day-cell admin-day-cell h-32 min-h-[120px] w-full p-2 border border-neutral-800/60 rounded flex flex-col justify-between transition-all overflow-hidden';
+        cell.className = 'calendar-day-cell admin-day-cell w-full aspect-square p-2 border border-neutral-800/60 rounded relative flex flex-col justify-between transition-all overflow-hidden';
 
         // Check if Sunday
         const dateObj = new Date(adminCalendarYear, adminCalendarMonth, day);
