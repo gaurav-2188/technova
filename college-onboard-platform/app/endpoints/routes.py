@@ -540,7 +540,7 @@ async def chatbot_endpoint(req: ChatRequest):
                                 streamed_any = True
                                 yield chunk.text
             except Exception as e:
-                write_log("CHATBOT_ERROR", f"All Gemini calls failed: {str(e)}")ATBOT_ERROR", f"All Gemini calls failed: {str(e)}")
+                write_log("CHATBOT_ERROR", f"All Gemini calls failed: {str(e)}")
             
             if not streamed_any:
                 import re
