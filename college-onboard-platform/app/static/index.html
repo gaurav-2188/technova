@@ -73,7 +73,7 @@
                 <aside class="sidebar-col glass-card">
                     <!-- Sidebar Profile Card -->
                     <div class="sidebar-profile">
-                        <div class="profile-avatar">👤</div>
+                        <div class="profile-avatar" id="sidebar-avatar">👤</div>
                         <h4 id="sidebar-name">Dr. Jane Doe</h4>
                         <p id="sidebar-email">jane@pes.edu</p>
                     </div>
@@ -354,16 +354,57 @@
                                         style="color: #8b949e; font-size: 1.1rem; font-weight: bold;">&gt;</span>
                                 </div>
                                 <div class="settings-item" onclick="showSettingsView('update-email')"
-                                    style="display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: none; cursor: pointer; transition: background 0.2s ease, transform 0.1s ease; user-select: none;">
-                                    <div class="settings-item-left"
-                                        style="display: flex; align-items: center; gap: 12px; font-size: 1rem; font-weight: 500; color: #c9d1d9;">
-                                        <span class="settings-item-icon"
-                                            style="font-size: 1.2rem; color: #8b949e;">✉️</span>
-                                        <span>Update Email ID</span>
+                                     style="display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); cursor: pointer; transition: background 0.2s ease, transform 0.1s ease; user-select: none;">
+                                     <div class="settings-item-left"
+                                         style="display: flex; align-items: center; gap: 12px; font-size: 1rem; font-weight: 500; color: #c9d1d9;">
+                                         <span class="settings-item-icon"
+                                             style="font-size: 1.2rem; color: #8b949e;">✉️</span>
+                                         <span>Update Email ID</span>
+                                     </div>
+                                     <span class="settings-item-chevron"
+                                         style="color: #8b949e; font-size: 1.1rem; font-weight: bold;">&gt;</span>
+                                 </div>
+                                 <div class="settings-item" onclick="showSettingsView('upload-profile-photo')"
+                                     style="display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: none; cursor: pointer; transition: background 0.2s ease, transform 0.1s ease; user-select: none;">
+                                     <div class="settings-item-left"
+                                         style="display: flex; align-items: center; gap: 12px; font-size: 1rem; font-weight: 500; color: #c9d1d9;">
+                                         <span class="settings-item-icon"
+                                             style="font-size: 1.2rem; color: #8b949e;">🖼️</span>
+                                         <span>Profile Photo</span>
+                                     </div>
+                                     <span class="settings-item-chevron"
+                                         style="color: #8b949e; font-size: 1.1rem; font-weight: bold;">&gt;</span>
+                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Upload Profile Photo View -->
+                        <div id="settings-upload-profile-photo-view" class="hidden">
+                            <button class="settings-back-btn" onclick="showSettingsView('main')">← Back to
+                                Settings</button>
+                            <div class="settings-card"
+                                style="max-width: 450px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 25px;">
+                                <h3 style="margin-top: 0; margin-bottom: 20px; font-size: 1.2rem; color: #58a6ff;">
+                                    Profile Photo</h3>
+                                <div style="display: flex; flex-direction: column; align-items: center; gap: 15px; margin-bottom: 20px;">
+                                    <div id="settings-photo-preview-container" style="width: 100px; height: 100px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 3rem; overflow: hidden; position: relative;">
+                                        👤
                                     </div>
-                                    <span class="settings-item-chevron"
-                                        style="color: #8b949e; font-size: 1.1rem; font-weight: bold;">&gt;</span>
+                                    <span id="settings-photo-status" style="font-size: 0.85rem; color: #8b949e;">No custom photo uploaded</span>
                                 </div>
+                                <form id="profile-photo-form">
+                                    <div class="form-group" style="margin-bottom: 20px;">
+                                        <label style="display: block; margin-bottom: 6px; font-size: 0.9rem; color: #8b949e;">Select Image (PNG / JPG)</label>
+                                        <div style="display: flex; gap: 10px; align-items: center;">
+                                            <button type="button" id="photo-file-trigger" class="btn btn-secondary" style="margin-top: 0; padding: 8px 16px;">
+                                                📁 Choose Photo
+                                            </button>
+                                            <input type="file" id="photo-file-input" accept="image/png, image/jpeg, image/jpg" style="display: none;">
+                                        </div>
+                                    </div>
+                                    <button type="submit" id="photo-upload-submit" class="btn btn-primary"
+                                        style="width: 100%; border-radius: 8px; padding: 12px;" disabled>Upload Photo</button>
+                                </form>
                             </div>
                         </div>
 

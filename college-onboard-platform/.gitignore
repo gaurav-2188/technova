@@ -202,3 +202,8 @@ my_env.tfvars
 
 # A2A Inspector
 tools/a2a-inspector/
+
+# Application Local State and Uploads
+app/static/uploads/
+state_store.json
+agent_activity.log

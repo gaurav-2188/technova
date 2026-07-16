@@ -241,3 +241,66 @@ def test_project_upload(server_fixture: subprocess.Popen[str]) -> None:
     assert len(projects) > 0
     assert projects[-1]["title"] == "Quantum Computing"
     assert projects[-1]["filename"] == "mock_proj.pdf"
+
+
+def test_project_delete(server_fixture: subprocess.Popen[str]) -> None:
+    """Test project deletion through /api/action endpoint."""
+    delete_data = {
+        "action": "delete_project",
+        "payload": {
+            "username": "teacher",
+            "filename": "mock_proj.pdf"
+        }
+    }
+    res = requests.post(
+        BASE_URL + "/api/action",
+        headers=HEADERS,
+        json=delete_data,
+        timeout=10
+    )
+    assert res.status_code == 200
+    
+    # Retrieve state again to verify project has been removed
+    state_res = requests.get(BASE_URL + "/api/state")
+    state = state_res.json()
+    projects = state["teachers"]["teacher"].get("projects", [])
+    filenames = [p["filename"] for p in projects]
+    assert "mock_proj.pdf" not in filenames
+
+
+def test_profile_photo_upload_and_delete(server_fixture: subprocess.Popen[str]) -> None:
+    """Test teacher profile photo upload and admin photo deletion."""
+    files = {"file": ("avatar.png", b"png-bytes", "image/png")}
+    data = {"username": "teacher"}
+    res = requests.post(
+        BASE_URL + "/api/profile-photo/upload",
+        files=files,
+        data=data,
+        timeout=10
+    )
+    assert res.status_code == 200
+    res_data = res.json()
+    assert res_data["status"] == "success"
+    assert "profile_photo" in res_data["profile_photo_url"]
+    
+    state_res = requests.get(BASE_URL + "/api/state")
+    state = state_res.json()
+    assert state["teachers"]["teacher"].get("profile_photo_url") == res_data["profile_photo_url"]
+    
+    delete_data = {
+        "action": "remove_profile_photo",
+        "payload": {
+            "username": "teacher"
+        }
+    }
+    del_res = requests.post(
+        BASE_URL + "/api/action",
+        headers=HEADERS,
+        json=delete_data,
+        timeout=10
+    )
+    assert del_res.status_code == 200
+    
+    state_res2 = requests.get(BASE_URL + "/api/state")
+    state2 = state_res2.json()
+    assert state2["teachers"]["teacher"].get("profile_photo_url") == ""
