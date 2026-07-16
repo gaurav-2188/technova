@@ -154,6 +154,8 @@ logoutBtn.addEventListener('click', () => {
 // Periodic Synchronization
 async function syncStateData() {
     if (isUploading) return;
+    const editDrawer = document.getElementById('hr-edit-drawer');
+    if (editDrawer && !editDrawer.classList.contains('hidden')) return;
     try {
         const res = await fetch('/api/state');
         systemState = await res.json();
@@ -538,7 +540,11 @@ function updateDashboardView() {
                 pendingTeachersCount++;
             }
 
-            const matchesQuery = !hrQuery || (t.employee_id && t.employee_id.toLowerCase().includes(hrQuery));
+            const matchesQuery = !hrQuery || 
+                (t.name && t.name.toLowerCase().includes(hrQuery)) ||
+                (t.username && t.username.toLowerCase().includes(hrQuery)) ||
+                (t.email && t.email.toLowerCase().includes(hrQuery)) ||
+                (t.employee_id && t.employee_id.toLowerCase().includes(hrQuery));
 
             if (teachersListContainer && matchesQuery) {
                 const div = document.createElement('div');
@@ -771,7 +777,10 @@ function updateDashboardView() {
             });
             sortedOverviewTeachers.forEach(t => {
 
-                const matchesQuery = !adminQuery || (t.employee_id && t.employee_id.toLowerCase().includes(adminQuery));
+                const matchesQuery = !adminQuery || 
+                    (t.name && t.name.toLowerCase().includes(adminQuery)) ||
+                    (t.email && t.email.toLowerCase().includes(adminQuery)) ||
+                    (t.employee_id && t.employee_id.toLowerCase().includes(adminQuery));
 
                 if (matchesQuery) {
                     let seatingHTML = 'Not Allotted';
