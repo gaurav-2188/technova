@@ -571,6 +571,21 @@ body {
     50% { opacity: 1; }
 }
 
+/* Blinking Thinking Text Animation */
+.blinking-thinking {
+    animation: textBlink 1.4s infinite ease-in-out;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 0.9rem;
+    letter-spacing: 0.5px;
+    display: inline-block;
+}
+
+@keyframes textBlink {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+}
+
 @keyframes fadeInUp {
     from {
         opacity: 0;

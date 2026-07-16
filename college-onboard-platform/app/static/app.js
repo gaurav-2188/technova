@@ -1503,15 +1503,8 @@ async function sendFullscreenChatMessage() {
     fullscreenChatInput.value = '';
     fullscreenChatBody.scrollTop = fullscreenChatBody.scrollHeight;
 
-    // Show thinking indicator bubble with custom pulsing shimmer
-    const shimmerHtml = `
-        <div class="shimmer-container">
-            <div class="shimmer-line"></div>
-            <div class="shimmer-line"></div>
-            <div class="shimmer-line"></div>
-        </div>
-    `;
-    const thinkingBubble = appendFullscreenChatBubble('bot', shimmerHtml, true);
+    // Show thinking indicator bubble with custom blinking "Thinking..." text
+    const thinkingBubble = appendFullscreenChatBubble('bot', '<span class="blinking-thinking">Thinking...</span>', true);
     thinkingBubble.id = 'thinking-bubble';
 
     try {
@@ -1529,7 +1522,7 @@ async function sendFullscreenChatMessage() {
             throw new Error('Network response was not ok');
         }
 
-        const botBubble = appendFullscreenChatBubble('bot', '<span class="streaming-cursor"></span>', true);
+        const botBubble = appendFullscreenChatBubble('bot', '<span class="blinking-thinking">Thinking...</span>', true);
         const reader = res.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let accumulatedResponse = "";
@@ -1538,7 +1531,6 @@ async function sendFullscreenChatMessage() {
         while (true) {
             const { done, value } = await reader.read();
             if (done) {
-                // Remove the streaming cursor when finished
                 botBubble.innerHTML = formatMarkdown(accumulatedResponse);
                 break;
             }
@@ -1548,7 +1540,7 @@ async function sendFullscreenChatMessage() {
                 isFirstChunk = false;
             }
             accumulatedResponse += chunk;
-            botBubble.innerHTML = formatMarkdown(accumulatedResponse) + '<span class="streaming-cursor"></span>';
+            botBubble.innerHTML = formatMarkdown(accumulatedResponse);
             fullscreenChatBody.scrollTop = fullscreenChatBody.scrollHeight;
         }
         saveChatHistory();
