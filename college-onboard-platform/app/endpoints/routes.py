@@ -131,10 +131,19 @@ async def upload_project_endpoint(
             file_bytes = await file.read()
             file_path = f"{username}/projects/{file.filename}"
             
+            import mimetypes
+            content_type, _ = mimetypes.guess_type(file.filename)
+            if not content_type:
+                content_type = "application/octet-stream"
+            
             res = client.storage.from_("documents").upload(
                 path=file_path,
                 file=file_bytes,
-                file_options={"cache-control": "3600", "upsert": "true"}
+                file_options={
+                    "cache-control": "3600", 
+                    "upsert": "true", 
+                    "content-type": content_type
+                }
             )
             file_url = client.storage.from_("documents").get_public_url(file_path)
             uploaded_to_supabase = True
