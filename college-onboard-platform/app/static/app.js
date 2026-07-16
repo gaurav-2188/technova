@@ -1511,7 +1511,7 @@ async function sendFullscreenChatMessage() {
             <div class="shimmer-line"></div>
         </div>
     `;
-    const thinkingBubble = appendFullscreenChatBubble('bot', shimmerHtml);
+    const thinkingBubble = appendFullscreenChatBubble('bot', shimmerHtml, true);
     thinkingBubble.id = 'thinking-bubble';
 
     try {
@@ -1529,7 +1529,7 @@ async function sendFullscreenChatMessage() {
             throw new Error('Network response was not ok');
         }
 
-        const botBubble = appendFullscreenChatBubble('bot', '<span class="streaming-cursor"></span>');
+        const botBubble = appendFullscreenChatBubble('bot', '<span class="streaming-cursor"></span>', true);
         const reader = res.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let accumulatedResponse = "";
@@ -1668,10 +1668,10 @@ function loadChatHistory() {
     }
 }
 
-function appendFullscreenChatBubble(sender, text) {
+function appendFullscreenChatBubble(sender, text, isHtml = false) {
     const bubble = document.createElement('div');
     bubble.className = `chat-message ${sender}`;
-    bubble.innerHTML = formatMarkdown(text);
+    bubble.innerHTML = isHtml ? text : formatMarkdown(text);
     fullscreenChatBody.appendChild(bubble);
     saveChatHistory();
     return bubble;
