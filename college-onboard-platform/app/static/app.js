@@ -3237,7 +3237,15 @@ function setupCalendarEventModalListeners() {
                     renderAdminCalendar();
                 } else {
                     const err = await res.json();
-                    alert(`Failed to save event: ${err.detail || 'Unknown error'}`);
+                    let msg = 'Unknown error';
+                    if (err.detail) {
+                        if (Array.isArray(err.detail)) {
+                            msg = err.detail.map(d => `${d.loc ? d.loc.join('.') : 'field'}: ${d.msg}`).join('\n');
+                        } else {
+                            msg = err.detail;
+                        }
+                    }
+                    alert(`Failed to save event:\n${msg}`);
                 }
             } catch (e) {
                 alert('Network error while saving event.');

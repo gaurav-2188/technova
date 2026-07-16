@@ -1167,8 +1167,8 @@ class MeetingSchema(BaseModel):
     id: Optional[str] = None
     title: str
     description: str
-    event_date: str
-    event_time: str
+    event_date: Optional[str] = None
+    event_time: Optional[str] = None
     created_at: Optional[str] = None
     departments: Optional[List[str]] = None
     department: Optional[str] = None
@@ -1314,6 +1314,11 @@ def add_calendar_meeting(meeting: MeetingSchema) -> dict:
         meeting_dict["event_date"] = meeting_dict.get("date")
     if not meeting_dict.get("event_time") and meeting_dict.get("time"):
         meeting_dict["event_time"] = meeting_dict.get("time")
+        
+    if not meeting_dict.get("event_date"):
+        raise HTTPException(status_code=400, detail="Event date is required.")
+    if not meeting_dict.get("event_time"):
+        raise HTTPException(status_code=400, detail="Event time is required.")
 
     if meeting_dict.get("departments"):
         meeting_dict["department"] = ", ".join(meeting_dict["departments"])
@@ -1358,6 +1363,11 @@ def update_calendar_meeting(id: str, meeting: MeetingSchema) -> dict:
         meeting_dict["event_date"] = meeting_dict.get("date")
     if not meeting_dict.get("event_time") and meeting_dict.get("time"):
         meeting_dict["event_time"] = meeting_dict.get("time")
+
+    if not meeting_dict.get("event_date"):
+        raise HTTPException(status_code=400, detail="Event date is required.")
+    if not meeting_dict.get("event_time"):
+        raise HTTPException(status_code=400, detail="Event time is required.")
 
     if meeting_dict.get("departments"):
         meeting_dict["department"] = ", ".join(meeting_dict["departments"])
