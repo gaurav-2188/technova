@@ -614,6 +614,24 @@ function updateDashboardView() {
                 const activeCard = teachersListContainer.querySelector(`[data-username="${activeUsername}"]`);
                 if (activeCard) {
                     activeCard.parentNode.insertBefore(editDrawer, activeCard.nextSibling);
+                    // Update photo container in drawer
+                    const activeTeacher = systemState.teachers[activeUsername];
+                    const photoContainer = document.getElementById('edit-photo-container');
+                    if (photoContainer && activeTeacher) {
+                        if (activeTeacher.profile_photo_url) {
+                            photoContainer.innerHTML = `
+                                <div style="display: flex; align-items: center; gap: 15px; background: rgba(255,255,255,0.02); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 8px;">
+                                    <img src="${activeTeacher.profile_photo_url}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255,255,255,0.1);">
+                                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                                        <span style="font-size: 0.85rem; color: var(--text-secondary);">Profile Photo</span>
+                                        <button type="button" class="btn btn-danger btn-sm" onclick="window.removeProfilePhoto('${activeTeacher.username}')" style="padding: 4px 10px; font-size: 0.75rem; width: fit-content; margin-top: 2px;">Remove Photo</button>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            photoContainer.innerHTML = '';
+                        }
+                    }
                 }
             }
         }
@@ -777,7 +795,6 @@ function updateDashboardView() {
                                 <img src="${t.profile_photo_url}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255,255,255,0.1);">
                                 <div style="display: flex; flex-direction: column; gap: 4px;">
                                     <span style="font-size: 0.85rem; color: var(--text-secondary);">Profile Photo Uploaded</span>
-                                    <button class="btn btn-danger btn-sm" onclick="window.removeProfilePhoto('${t.username}')" style="padding: 4px 10px; font-size: 0.75rem; width: fit-content; margin-top: 2px;">Remove Photo</button>
                                 </div>
                             </div>
                         `;
@@ -1189,6 +1206,24 @@ function openEditDrawer(username, cardElement) {
     document.getElementById('edit-dept').value = t.department;
     document.getElementById('edit-desig').value = t.designation;
     document.getElementById('edit-empid').value = t.employee_id || '';
+
+    // Handle photo display/delete
+    const photoContainer = document.getElementById('edit-photo-container');
+    if (photoContainer) {
+        if (t.profile_photo_url) {
+            photoContainer.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 15px; background: rgba(255,255,255,0.02); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 8px;">
+                    <img src="${t.profile_photo_url}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255,255,255,0.1);">
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <span style="font-size: 0.85rem; color: var(--text-secondary);">Profile Photo</span>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="window.removeProfilePhoto('${t.username}')" style="padding: 4px 10px; font-size: 0.75rem; width: fit-content; margin-top: 2px;">Remove Photo</button>
+                    </div>
+                </div>
+            `;
+        } else {
+            photoContainer.innerHTML = '';
+        }
+    }
 
     editDrawer.classList.remove('hidden');
 }

@@ -1038,7 +1038,7 @@ def trigger_action(req: ActionRequest, background_tasks: BackgroundTasks) -> dic
             raise HTTPException(status_code=400, detail="No profile photo to remove.")
             
         teacher["profile_photo_url"] = ""
-        write_log("ADMIN_AGENT", f"Admin removed profile photo for teacher {username}")
+        write_log("HR_AGENT", f"HR removed profile photo for teacher {username}")
         
         try:
             filename = photo_url.split("/")[-1]
@@ -1046,7 +1046,7 @@ def trigger_action(req: ActionRequest, background_tasks: BackgroundTasks) -> dic
             local_file_path = os.path.join(static_dir, "uploads", username, filename)
             if os.path.exists(local_file_path):
                 os.remove(local_file_path)
-                write_log("ADMIN_AGENT", f"Deleted local profile photo file: {local_file_path}")
+                write_log("HR_AGENT", f"Deleted local profile photo file: {local_file_path}")
         except Exception as e:
             write_log("UPLOAD_WARNING", f"Failed to delete local profile photo: {str(e)}")
 
@@ -1059,7 +1059,7 @@ def trigger_action(req: ActionRequest, background_tasks: BackgroundTasks) -> dic
                 filename = photo_url.split("/")[-1]
                 file_path = f"{username}/{filename}"
                 client.storage.from_("documents").remove([file_path])
-                write_log("ADMIN_AGENT", f"Deleted Supabase profile photo file: {file_path}")
+                write_log("HR_AGENT", f"Deleted Supabase profile photo file: {file_path}")
             except Exception as e:
                 write_log("UPLOAD_WARNING", f"Failed to delete Supabase profile photo: {str(e)}")
 
