@@ -1551,8 +1551,11 @@ async function sendFullscreenChatMessage() {
 
 function formatMarkdown(text) {
     if (!text) return '';
+    // Clean up citations: e.g. [cite: 1], [cite:1], [cite], etc.
+    let cleaned = text.replace(/\[cite:?\s*\d*\]/gi, '');
+    
     // Escape HTML first to prevent XSS
-    let escaped = text
+    let escaped = cleaned
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")

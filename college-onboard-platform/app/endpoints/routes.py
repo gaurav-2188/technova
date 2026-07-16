@@ -424,7 +424,20 @@ def chatbot_endpoint(req: ChatRequest):
                 write_log("CHATBOT_ERROR", f"All Gemini calls failed: {str(e)}")
             
             if not streamed_any:
-                fallback_msg = f"[RAG Rules Context] Retrieved Rules:\n{rules_context}\n\n(Please check that Google Cloud credentials or GEMINI_API_KEY are configured)"
+                cleaned_rules = rules_context
+                cleaned_rules = re.sub(r'^\[Pinecone Index:[^\]]+\] RETRIEVED REAL-TIME RULES:\s*', '', cleaned_rules, flags=re.IGNORECASE)
+                cleaned_rules = re.sub(r'^\[Pinecone Search \([^)]+\)\] RETRIEVED RULES CONTEXT:\s*', '', cleaned_rules, flags=re.IGNORECASE)
+                cleaned_rules = re.sub(r'\[cite:?\s*\d*\]', '', cleaned_rules, flags=re.IGNORECASE)
+                cleaned_rules = re.sub(r' +', ' ', cleaned_rules)
+                
+                if cleaned_rules.strip():
+                    fallback_msg = (
+                        "🤖 **Here is what I found in the PESU policy database:**\n\n"
+                        f"{cleaned_rules.strip()}"
+                    )
+                else:
+                    fallback_msg = "🤖 Sorry, I couldn't find any relevant rules or policies in the database for your query."
+                
                 import asyncio
                 for char in fallback_msg:
                     yield char
