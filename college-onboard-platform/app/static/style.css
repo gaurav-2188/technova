@@ -499,6 +499,8 @@ body {
     border-radius: 12px;
     font-size: 0.85rem;
     line-height: 1.45;
+    animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    opacity: 0;
 }
 
 .chat-message.bot {
@@ -513,6 +515,86 @@ body {
     align-self: flex-end;
     border-bottom-right-radius: 2px;
     color: #fff;
+}
+
+/* Pulsing Gemini Shimmer Animation */
+.shimmer-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 180px;
+    padding: 6px 0;
+}
+
+.shimmer-line {
+    height: 10px;
+    width: 100%;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.03) 25%, rgba(255, 255, 255, 0.12) 50%, rgba(255, 255, 255, 0.03) 75%);
+    background-size: 200% 100%;
+    border-radius: 4px;
+    animation: shimmer 1.6s infinite linear;
+}
+
+.shimmer-line:nth-child(2) {
+    width: 80%;
+    animation-delay: 0.15s;
+}
+
+.shimmer-line:nth-child(3) {
+    width: 55%;
+    animation-delay: 0.3s;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* Glowing Blinking Cursor */
+.streaming-cursor {
+    display: inline-block;
+    width: 2px;
+    height: 14px;
+    background: #58a6ff;
+    margin-left: 2px;
+    vertical-align: middle;
+    animation: blink 0.8s infinite;
+    box-shadow: 0 0 6px #58a6ff;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 1; }
+}
+
+/* Blinking Thinking Text Animation */
+.blinking-thinking {
+    animation: textBlink 1.4s infinite ease-in-out;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 0.9rem;
+    letter-spacing: 0.5px;
+    display: inline-block;
+}
+
+@keyframes textBlink {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* Attendance stats */

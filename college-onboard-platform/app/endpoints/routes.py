@@ -395,9 +395,9 @@ def chatbot_endpoint(req: ChatRequest):
             
             prompt = (
                 f"You are a helpful PESU AI. Use the following Pinecone RAG context to answer the user's query.\n"
-                f"Make sure to use relevant emojis where appropriate in your response to make it engaging and friendly.\n"
-                f"If you answer using the retrieved context guidelines, always append '[Source: Pinecone Database]' to make it clear that the response refers to retrieved records.\n"
-                f"If the context does not contain enough info to answer the query, reply to the best of your knowledge, specify that it is general info, and do not append the citation.\n\n"
+                f"Your answer must be direct, concise, and specifically address only what the user is asking. Do not summarize or list unrelated parts of the context. For specific questions (e.g., 'who is the chairperson of cse dpt?'), provide a direct, concise answer (e.g., 'Mrs Shylaja SS is the chairperson of the PESU CSE department and her contact info is example@gmail.com') without unnecessary lists, headers, or details.\n"
+                f"When formatting larger or multi-part responses, make sure they are well-aligned and readable using proper spacing, newlines, bold text, or clean bullet points where appropriate.\n"
+                f"Make sure to use relevant emojis where appropriate to make it engaging and friendly.\n\n"
                 f"Context:\n{rules_context}\n\n"
                 f"User Query: {clean_input}\n\n"
                 f"Response:"
@@ -409,55 +409,106 @@ def chatbot_endpoint(req: ChatRequest):
                 import requests
                 from dotenv import load_dotenv
                 load_dotenv(override=True)
-                api_key = os.getenv("GEMINI_API_KEY", "").strip()
+                groq_key = os.getenv("GROQ_API_KEY", "").strip()
 
-                # 1. Try Direct REST Streaming API (Highly robust for AQ. keys)
-                write_log("CHATBOT_DEBUG", f"api_key loaded: length={len(api_key)}, starts_with={api_key[:5] if api_key else 'None'}")
-                if api_key:
-                    models_to_try = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.0-flash']
-                    for model_name in models_to_try:
-                        try:
-                            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:streamGenerateContent?key={api_key}"
-                            headers = {"Content-Type": "application/json"}
-                            data = {
-                                "contents": [{"parts": [{"text": prompt}]}]
-                            }
-                            write_log("CHATBOT_DEBUG", f"Attempting REST stream with model: {model_name}")
-                            response = requests.post(url, headers=headers, json=data, stream=True, timeout=30.0)
-                            write_log("CHATBOT_DEBUG", f"REST stream response status for {model_name}: {response.status_code}")
-                            if response.status_code == 200:
-                                for line in response.iter_lines():
-                                    if line:
-                                        line_str = line.decode('utf-8').strip()
-                                        if line_str.startswith('['):
-                                            line_str = line_str[1:]
-                                        if line_str.startswith(','):
-                                            line_str = line_str[1:]
-                                        if line_str.endswith(']'):
-                                            line_str = line_str[:-1]
-                                        line_str = line_str.strip()
-                                        if not line_str:
-                                            continue
+                # Try Groq API first if configured
+                if groq_key and groq_key != "your_groq_api_key_here":
+                    write_log("CHATBOT_DEBUG", "GROQ_API_KEY detected. Using Groq API for chatbot endpoint.")
+                    url = "https://api.groq.com/openai/v1/chat/completions"
+                    headers = {
+                        "Authorization": f"Bearer {groq_key}",
+                        "Content-Type": "application/json"
+                    }
+                    data = {
+                        "model": "llama-3.3-70b-versatile",
+                        "messages": [
+                            {"role": "user", "content": prompt}
+                        ],
+                        "stream": True
+                    }
+                    try:
+                        response = requests.post(url, headers=headers, json=data, stream=True, timeout=30.0)
+                        if response.status_code == 200:
+                            for line in response.iter_lines():
+                                if line:
+                                    line_str = line.decode('utf-8').strip()
+                                    if line_str.startswith("data: "):
+                                        data_content = line_str[6:].strip()
+                                        if data_content == "[DONE]":
+                                            break
                                         try:
-                                            chunk_json = json.loads(line_str)
-                                            text = chunk_json["candidates"][0]["content"]["parts"][0]["text"]
-                                            if text:
-                                                streamed_any = True
-                                                for char in text:
-                                                    yield char
-                                                    await asyncio.sleep(0.001)
+                                            chunk_json = json.loads(data_content)
+                                            delta = chunk_json["choices"][0]["delta"]
+                                            if "content" in delta:
+                                                text = delta["content"]
+                                                if text:
+                                                    streamed_any = True
+                                                    for char in text:
+                                                        yield char
+                                                        await asyncio.sleep(0.001)
                                         except Exception:
                                             pass
-                                if streamed_any:
-                                    break
-                            else:
-                                try:
-                                    err_content = response.text
-                                except Exception:
-                                    err_content = "could not read body"
-                                write_log("CHATBOT_ERROR", f"REST stream {model_name} returned non-200: {response.status_code} - {err_content}")
-                        except Exception as rest_err:
-                            write_log("CHATBOT_ERROR", f"REST stream {model_name} request failed: {str(rest_err)}.")
+                            if streamed_any:
+                                write_log("CHATBOT_DEBUG", "Groq stream finished successfully.")
+                        else:
+                            try:
+                                err_content = response.text
+                            except Exception:
+                                err_content = "could not read body"
+                            write_log("CHATBOT_ERROR", f"Groq stream returned non-200: {response.status_code} - {err_content}")
+                    except Exception as groq_err:
+                        write_log("CHATBOT_ERROR", f"Groq API call failed: {str(groq_err)}")
+
+                # Fallback to Gemini if Groq did not stream anything
+                if not streamed_any:
+                    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+                    # 1. Try Direct REST Streaming API (Highly robust for AQ. keys)
+                    write_log("CHATBOT_DEBUG", f"api_key loaded: length={len(api_key)}, starts_with={api_key[:5] if api_key else 'None'}")
+                    if api_key:
+                        models_to_try = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.0-flash']
+                        for model_name in models_to_try:
+                            try:
+                                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:streamGenerateContent?key={api_key}"
+                                headers = {"Content-Type": "application/json"}
+                                data = {
+                                    "contents": [{"parts": [{"text": prompt}]}]
+                                }
+                                write_log("CHATBOT_DEBUG", f"Attempting REST stream with model: {model_name}")
+                                response = requests.post(url, headers=headers, json=data, stream=True, timeout=30.0)
+                                write_log("CHATBOT_DEBUG", f"REST stream response status for {model_name}: {response.status_code}")
+                                if response.status_code == 200:
+                                    for line in response.iter_lines():
+                                        if line:
+                                            line_str = line.decode('utf-8').strip()
+                                            if line_str.startswith('['):
+                                                line_str = line_str[1:]
+                                            if line_str.startswith(','):
+                                                line_str = line_str[1:]
+                                            if line_str.endswith(']'):
+                                                line_str = line_str[:-1]
+                                            line_str = line_str.strip()
+                                            if not line_str:
+                                                continue
+                                            try:
+                                                chunk_json = json.loads(line_str)
+                                                text = chunk_json["candidates"][0]["content"]["parts"][0]["text"]
+                                                if text:
+                                                    streamed_any = True
+                                                    for char in text:
+                                                        yield char
+                                                        await asyncio.sleep(0.001)
+                                            except Exception:
+                                                pass
+                                    if streamed_any:
+                                        break
+                                else:
+                                    try:
+                                        err_content = response.text
+                                    except Exception:
+                                        err_content = "could not read body"
+                                    write_log("CHATBOT_ERROR", f"REST stream {model_name} returned non-200: {response.status_code} - {err_content}")
+                            except Exception as rest_err:
+                                write_log("CHATBOT_ERROR", f"REST stream {model_name} request failed: {str(rest_err)}.")
                             
                 # 2. Try SDK Fallbacks if REST did not stream anything
                 if not streamed_any:
@@ -494,7 +545,100 @@ def chatbot_endpoint(req: ChatRequest):
                 write_log("CHATBOT_ERROR", f"All Gemini calls failed: {str(e)}")
             
             if not streamed_any:
-                fallback_msg = f"[RAG Rules Context] Retrieved Rules:\n{rules_context}\n\n(Please check that Google Cloud credentials or GEMINI_API_KEY are configured)"
+                import re
+                cleaned_rules = rules_context
+                cleaned_rules = re.sub(r'^\[Pinecone Index:[^\]]+\] RETRIEVED REAL-TIME RULES:\s*', '', cleaned_rules, flags=re.IGNORECASE)
+                cleaned_rules = re.sub(r'^\[Pinecone Search \([^)]+\)\] RETRIEVED RULES CONTEXT:\s*', '', cleaned_rules, flags=re.IGNORECASE)
+                cleaned_rules = re.sub(r'\[cite:?\s*\d*\]', '', cleaned_rules, flags=re.IGNORECASE)
+                
+                replacements = {
+                    "Casual/SickLeave": "Casual / Sick Leave",
+                    "PaternityLeave": "Paternity Leave",
+                    "Maternity/Adoption": "Maternity / Adoption",
+                    "BereavementLeave": "Bereavement Leave",
+                    "PrivilegeLeave": "Privilege Leave",
+                    "RelocationTransfer": "Relocation & Transfer",
+                    "ofsick": "of sick",
+                    "byyear-end": "by year-end",
+                    "areexhausted": "are exhausted",
+                    "accrualand": "accrual and",
+                    "familymember": "family member",
+                    "continuousleave": "continuous leave",
+                    "orvacation": "or vacation",
+                    "ofrelocation": "of relocation",
+                    "Officialholidays": "Official holidays",
+                    "Policy.Line": "Policy. Line",
+                    "Policy.Entitlement": "Policy. Entitlement",
+                    "Dept Head": "Department Head",
+                    "member.Entitlement": "member. Entitlement",
+                }
+                
+                for old, new in replacements.items():
+                    cleaned_rules = cleaned_rules.replace(old, new)
+                    
+                # Extract search keywords from user query, removing common stop words
+                stop_words = {"who", "is", "the", "of", "a", "an", "hey", "can", "you", "tell", "me", "what", "about", "for", "please", "help", "with", "query", "question", "info", "information", "detail", "details"}
+                query_words = [w.lower().strip(",.?!()\"'") for w in clean_input.split()]
+                keywords = [w for w in query_words if len(w) > 2 and w not in stop_words]
+
+                lines = cleaned_rules.split('\n')
+                formatted_sections = []
+                
+                for line in lines:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    if line.startswith("- "):
+                        line = line[2:].strip()
+                    
+                    sentences = re.split(r'\.\s+', line)
+                    for s in sentences:
+                        s_clean = s.strip()
+                        if not s_clean:
+                            continue
+                        if not s_clean.endswith('.'):
+                            s_clean += '.'
+                            
+                        # If query keywords exist, filter sentences to only those containing at least one keyword
+                        if keywords:
+                            has_match = False
+                            for kw in keywords:
+                                if kw in s_clean.lower():
+                                    has_match = True
+                                    break
+                            if not has_match:
+                                continue
+                            
+                        # Keywords to format as header
+                        headers = [
+                            "Casual / Sick Leave", "Paternity Leave", "Maternity / Adoption", 
+                            "Bereavement Leave", "Privilege Leave", "Relocation & Transfer", 
+                            "General Leave Policies", "Loss of Pay", "Leave Classification", 
+                            "Public Holidays", "Leave Application", "Leave Donation", 
+                            "Accumulated Earned"
+                        ]
+                        
+                        if any(keyword.lower() in s_clean.lower() for keyword in headers):
+                            formatted_sections.append(f"\n📋 **{s_clean}**")
+                        elif "entitlement:" in s_clean.lower():
+                            val = re.sub(r'^entitlement\s*:\s*', '', s_clean, flags=re.IGNORECASE)
+                            formatted_sections.append(f"  * **Entitlement:** {val}")
+                        elif any(auth.lower() in s_clean.lower() for auth in ["Line Manager", "Department Head", "HR"]):
+                            formatted_sections.append(f"  * **Approvals:** {s_clean}")
+                        else:
+                            formatted_sections.append(f"  * {s_clean}")
+                            
+                result_text = "\n".join(formatted_sections)
+                result_text = re.sub(r'\n+', '\n\n', result_text).strip()
+                
+                if result_text:
+                    fallback_msg = (
+                        "🤖 **Here is what I found in the PESU policy database:**\n\n"
+                        f"{result_text}"
+                    )
+                else:
+                    fallback_msg = "🤖 Sorry, I couldn't find any relevant rules or policies in the database for your query."
+                
                 import asyncio
                 for char in fallback_msg:
                     yield char

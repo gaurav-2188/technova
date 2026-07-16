@@ -4,6 +4,7 @@ let currentRole = null; // 'candidate', 'hr', or 'admin'
 let systemState = null;
 let pollInterval = null;
 let editingSeating = {};
+let isUploading = false;
 
 // DOM Elements
 const loginScreen = document.getElementById('login-screen');
@@ -152,6 +153,7 @@ logoutBtn.addEventListener('click', () => {
 
 // Periodic Synchronization
 async function syncStateData() {
+    if (isUploading) return;
     try {
         const res = await fetch('/api/state');
         systemState = await res.json();
@@ -197,6 +199,11 @@ function switchTab(tabId) {
 
     if (tabId === 'candidate-settings') {
         showSettingsView('main');
+    }
+    if (tabId === 'candidate-chatbot') {
+        setTimeout(() => {
+            fullscreenChatBody.scrollTop = fullscreenChatBody.scrollHeight;
+        }, 50);
     }
 }
 
@@ -1280,6 +1287,8 @@ if (batchSubmitBtn) {
 
         if (filesToUpload.length === 0) return;
 
+        isUploading = true;
+
         // Save original state for rollback
         const originalTeacher = JSON.parse(JSON.stringify(systemState.teachers[currentUser]));
 
@@ -1325,10 +1334,12 @@ if (batchSubmitBtn) {
                 }
 
                 if (success) {
+                    isUploading = false;
                     syncStateData();
                 } else {
                     // Rollback
                     systemState.teachers[currentUser] = originalTeacher;
+                    isUploading = false;
                     updateDashboardView();
                     alert('One or more document uploads failed.');
                     updateSubmitButtonState();
@@ -1336,6 +1347,7 @@ if (batchSubmitBtn) {
             } catch (e) {
                 // Rollback
                 systemState.teachers[currentUser] = originalTeacher;
+                isUploading = false;
                 updateDashboardView();
                 alert('Server communication error during document upload.');
                 updateSubmitButtonState();
@@ -1540,8 +1552,8 @@ async function sendFullscreenChatMessage() {
     fullscreenChatInput.value = '';
     fullscreenChatBody.scrollTop = fullscreenChatBody.scrollHeight;
 
-    // Show thinking indicator bubble
-    const thinkingBubble = appendFullscreenChatBubble('bot', 'Thinking...');
+    // Show thinking indicator bubble with custom blinking "Thinking..." text
+    const thinkingBubble = appendFullscreenChatBubble('bot', '<span class="blinking-thinking">Thinking...</span>', true);
     thinkingBubble.id = 'thinking-bubble';
 
     try {
@@ -1559,7 +1571,7 @@ async function sendFullscreenChatMessage() {
             throw new Error('Network response was not ok');
         }
 
-        const botBubble = appendFullscreenChatBubble('bot', 'Thinking...');
+        const botBubble = appendFullscreenChatBubble('bot', '<span class="blinking-thinking">Thinking...</span>', true);
         const reader = res.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let accumulatedResponse = "";
@@ -1567,7 +1579,10 @@ async function sendFullscreenChatMessage() {
 
         while (true) {
             const { done, value } = await reader.read();
-            if (done) break;
+            if (done) {
+                botBubble.innerHTML = formatMarkdown(accumulatedResponse);
+                break;
+            }
             const chunk = decoder.decode(value, { stream: true });
             if (isFirstChunk && chunk.length > 0) {
                 botBubble.innerHTML = "";
@@ -1588,6 +1603,64 @@ async function sendFullscreenChatMessage() {
 
 function formatMarkdown(text) {
     if (!text) return '';
+    // Clean up citations: e.g. [cite: 1], [cite:1], [cite], etc.
+    let cleaned = text.replace(/\[cite:?\s*\d*\]/gi, '');
+    
+    // Split by newlines to parse line-by-line (e.g. lists)
+    let lines = cleaned.split('\n');
+    let inList = false;
+    let htmlOutput = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i];
+        let trimmed = line.trim();
+        
+        // Check if the line is a bullet point (starts with *, -, or •)
+        let isBullet = /^[*•-]\s+/.test(trimmed);
+        
+        if (isBullet) {
+            if (!inList) {
+                htmlOutput.push('<ul style="margin: 0.35rem 0; padding-left: 1.25rem; list-style-type: disc;">');
+                inList = true;
+            }
+            // Remove the bullet character from the beginning
+            let content = trimmed.replace(/^[*•-]\s+/, '');
+            
+            // Format inline elements inside the bullet content
+            content = formatInlineMarkdown(content);
+            htmlOutput.push('<li style="margin-bottom: 0.25rem; line-height: 1.4; color: #e6edf3;">' + content + '</li>');
+        } else {
+            if (inList) {
+                htmlOutput.push('</ul>');
+                inList = false;
+            }
+            
+            // Format inline elements
+            let content = formatInlineMarkdown(line);
+            htmlOutput.push(content);
+        }
+    }
+    
+    if (inList) {
+        htmlOutput.push('</ul>');
+    }
+    
+    // Join with <br> for non-list items
+    let finalHtml = '';
+    for (let i = 0; i < htmlOutput.length; i++) {
+        let block = htmlOutput[i];
+        if (block.startsWith('<ul') || block.startsWith('</ul') || block.startsWith('<li')) {
+            finalHtml += block;
+        } else {
+            finalHtml += block + (i < htmlOutput.length - 1 ? '<br>' : '');
+        }
+    }
+    
+    return finalHtml;
+}
+
+function formatInlineMarkdown(text) {
+    if (!text) return '';
     // Escape HTML first to prevent XSS
     let escaped = text
         .replace(/&/g, "&amp;")
@@ -1598,11 +1671,10 @@ function formatMarkdown(text) {
 
     // Convert double asterisks bold: **text** -> <strong>text</strong>
     escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    // Convert single asterisks bold: *text* -> <strong>text</strong>
-    escaped = escaped.replace(/\*(.*?)\*/g, '<strong>$1</strong>');
-    // Convert newlines to line breaks
-    escaped = escaped.replace(/\n/g, '<br>');
-
+    
+    // Convert single asterisks bold/italic: *text* -> <em>$1</em>
+    escaped = escaped.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    
     return escaped;
 }
 
@@ -1630,17 +1702,19 @@ function loadChatHistory() {
                 bubble.innerHTML = msg.html;
                 fullscreenChatBody.appendChild(bubble);
             });
-            fullscreenChatBody.scrollTop = fullscreenChatBody.scrollHeight;
+            setTimeout(() => {
+                fullscreenChatBody.scrollTop = fullscreenChatBody.scrollHeight;
+            }, 100);
         } catch (e) {
             console.error('Failed to parse chat history', e);
         }
     }
 }
 
-function appendFullscreenChatBubble(sender, text) {
+function appendFullscreenChatBubble(sender, text, isHtml = false) {
     const bubble = document.createElement('div');
     bubble.className = `chat-message ${sender}`;
-    bubble.innerHTML = formatMarkdown(text);
+    bubble.innerHTML = isHtml ? text : formatMarkdown(text);
     fullscreenChatBody.appendChild(bubble);
     saveChatHistory();
     return bubble;
