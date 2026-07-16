@@ -457,7 +457,7 @@ body {
 .chatbot-container-full {
     display: flex;
     flex-direction: column;
-    height: 60vh;
+    height: 76vh;
 }
 
 .chatbot-header {

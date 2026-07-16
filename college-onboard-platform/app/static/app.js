@@ -213,17 +213,35 @@ function showSettingsView(viewName) {
     const mainList = document.getElementById('settings-main-list');
     const passwordView = document.getElementById('settings-change-password-view');
     const emailView = document.getElementById('settings-update-email-view');
+    const photoView = document.getElementById('settings-upload-profile-photo-view');
 
     if (!mainList || !passwordView || !emailView) return;
 
     mainList.classList.add('hidden');
     passwordView.classList.add('hidden');
     emailView.classList.add('hidden');
+    if (photoView) photoView.classList.add('hidden');
 
     if (viewName === 'change-password') {
         passwordView.classList.remove('hidden');
     } else if (viewName === 'update-email') {
         emailView.classList.remove('hidden');
+    } else if (viewName === 'upload-profile-photo') {
+        if (photoView) {
+            photoView.classList.remove('hidden');
+            const teacher = systemState.teachers[currentUser];
+            const previewContainer = document.getElementById('settings-photo-preview-container');
+            const photoStatus = document.getElementById('settings-photo-status');
+            if (teacher && previewContainer && photoStatus) {
+                if (teacher.profile_photo_url) {
+                    previewContainer.innerHTML = `<img src="${teacher.profile_photo_url}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+                    photoStatus.innerText = "Custom profile photo active";
+                } else {
+                    previewContainer.innerHTML = "👤";
+                    photoStatus.innerText = "No custom photo uploaded";
+                }
+            }
+        }
     } else {
         mainList.classList.remove('hidden');
     }
@@ -235,6 +253,15 @@ function updateDashboardView() {
 
     // Sidebar Blinking Alert for Candidate's Chatbot Tab
     const teacher = (systemState.teachers && systemState.teachers[currentUser]) ? systemState.teachers[currentUser] : null;
+    const sidebarAvatar = document.getElementById('sidebar-avatar');
+    if (sidebarAvatar) {
+        if (teacher && teacher.profile_photo_url) {
+            sidebarAvatar.innerHTML = `<img src="${teacher.profile_photo_url}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+        } else {
+            sidebarAvatar.innerHTML = '👤';
+        }
+    }
+
     const chatbotTab = document.querySelector('.nav-tab[data-tab="candidate-chatbot"]');
     if (teacher && currentRole === 'candidate') {
         const sidebarEmail = document.getElementById('sidebar-email');
@@ -474,9 +501,12 @@ function updateDashboardView() {
                             <span style="font-weight: 600; color: #c9d1d9; font-size: 1rem;">${proj.title}</span>
                             <span style="font-size: 0.8rem; color: #8b949e;">File: ${proj.filename} | Uploaded: ${proj.uploaded_at || 'N/A'}</span>
                         </div>
-                        <div>
+                        <div style="display: flex; gap: 8px;">
                             <button class="btn btn-secondary btn-sm" onclick="window.viewDoc('${proj.file_url}')" style="padding: 6px 16px; font-size: 0.85rem;">
                                 👁️ View
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="window.deleteProject('${proj.filename}')" style="padding: 6px 16px; font-size: 0.85rem;">
+                                🗑️ Delete
                             </button>
                         </div>
                     `;
@@ -550,12 +580,21 @@ function updateDashboardView() {
                 const div = document.createElement('div');
                 div.className = 'teacher-card-item';
                 div.setAttribute('data-username', t.username);
+                
+                let avatarHTML = '<span style="font-size: 1.5rem; margin-right: 12px; background: rgba(255,255,255,0.05); width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">👤</span>';
+                if (t.profile_photo_url) {
+                    avatarHTML = `<img src="${t.profile_photo_url}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 12px; border: 1px solid rgba(255,255,255,0.1);">`;
+                }
+
                 div.innerHTML = `
-                    <div class="teacher-card-info">
-                        <h4>${t.name} (@${t.username})</h4>
-                        <p>${t.designation} - ${t.department}</p>
-                        <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom: 2px;">Email: ${t.email || 'N/A'} | Emp ID: ${t.employee_id || 'None'}</p>
-                        <p style="font-size:0.75rem; color:var(--text-muted)">Seating: ${t.seating_info}</p>
+                    <div style="display: flex; align-items: center;">
+                        ${avatarHTML}
+                        <div class="teacher-card-info">
+                            <h4>${t.name} (@${t.username})</h4>
+                            <p>${t.designation} - ${t.department}</p>
+                            <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom: 2px;">Email: ${t.email || 'N/A'} | Emp ID: ${t.employee_id || 'None'}</p>
+                            <p style="font-size:0.75rem; color:var(--text-muted)">Seating: ${t.seating_info}</p>
+                        </div>
                     </div>
                     <button class="btn btn-secondary btn-sm edit-profile-btn" data-username="${t.username}">Edit Profile</button>
                 `;
@@ -731,10 +770,24 @@ function updateDashboardView() {
                     const card = document.createElement('div');
                     card.className = 'verification-teacher-section mt-3';
 
+                    let photoHTML = '';
+                    if (t.profile_photo_url) {
+                        photoHTML = `
+                            <div style="display: flex; align-items: center; gap: 15px; background: rgba(255,255,255,0.02); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 8px;">
+                                <img src="${t.profile_photo_url}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255,255,255,0.1);">
+                                <div style="display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="font-size: 0.85rem; color: var(--text-secondary);">Profile Photo Uploaded</span>
+                                    <button class="btn btn-danger btn-sm" onclick="window.removeProfilePhoto('${t.username}')" style="padding: 4px 10px; font-size: 0.75rem; width: fit-content; margin-top: 2px;">Remove Photo</button>
+                                </div>
+                            </div>
+                        `;
+                    }
+
                     if (isAllotted) {
                         card.innerHTML = `
                             <div class="verification-teacher-header">${t.name} (@${t.username})</div>
                             <div style="padding: 15px; background: rgba(255, 255, 255, 0.02); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.05); display: flex; flex-direction: column; gap: 10px;">
+                                ${photoHTML}
                                 <div><strong>Department:</strong> ${t.department}</div>
                                 <div><strong>Designation:</strong> ${t.designation}</div>
                                 <div style="display: flex; gap: 15px; align-items: center; margin-top: 10px; background: rgba(88,166,255,0.05); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(88,166,255,0.15);">
@@ -747,6 +800,7 @@ function updateDashboardView() {
                         card.innerHTML = `
                             <div class="verification-teacher-header">${t.name} (@${t.username})</div>
                             <div style="padding: 15px; background: rgba(255, 255, 255, 0.02); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.05); display: flex; flex-direction: column; gap: 10px;">
+                                ${photoHTML}
                                 <div><strong>Department:</strong> ${t.department}</div>
                                 <div><strong>Designation:</strong> ${t.designation}</div>
                                 <div style="display: flex; gap: 10px; align-items: center; justify-content: space-between; margin-top: 10px;">
@@ -893,6 +947,90 @@ window.viewDoc = function(docName) {
         </body>
         </html>
     `);
+};
+
+window.deleteProject = async function(filename) {
+    if (!confirm("Are you sure you want to permanently delete this project/publication?")) {
+        return;
+    }
+
+    const teacher = systemState.teachers[currentUser];
+    if (!teacher) return;
+
+    // Save original state for rollback
+    const originalProjects = [...(teacher.projects || [])];
+
+    // Optimistic Update
+    teacher.projects = (teacher.projects || []).filter(p => p.filename !== filename);
+    updateDashboardView();
+
+    try {
+        const res = await fetch('/api/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'delete_project',
+                payload: { username: currentUser, filename: filename }
+            })
+        });
+
+        if (!res.ok) {
+            // Rollback
+            teacher.projects = originalProjects;
+            updateDashboardView();
+            const err = await res.json();
+            alert(`Error deleting project: ${err.detail}`);
+        } else {
+            syncStateData();
+        }
+    } catch (e) {
+        // Rollback
+        teacher.projects = originalProjects;
+        updateDashboardView();
+        alert('Server communication error.');
+    }
+};
+
+window.removeProfilePhoto = async function(username) {
+    if (!confirm("Are you sure you want to permanently remove this teacher's profile photo?")) {
+        return;
+    }
+
+    const teacher = systemState.teachers[username];
+    if (!teacher) return;
+
+    // Save original state for rollback
+    const originalPhotoUrl = teacher.profile_photo_url;
+
+    // Optimistic Update
+    teacher.profile_photo_url = "";
+    updateDashboardView();
+
+    try {
+        const res = await fetch('/api/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'remove_profile_photo',
+                payload: { username }
+            })
+        });
+
+        if (!res.ok) {
+            // Rollback
+            teacher.profile_photo_url = originalPhotoUrl;
+            updateDashboardView();
+            const err = await res.json();
+            alert(`Error removing profile photo: ${err.detail}`);
+        } else {
+            syncStateData();
+        }
+    } catch (e) {
+        // Rollback
+        teacher.profile_photo_url = originalPhotoUrl;
+        updateDashboardView();
+        alert('Server communication error.');
+    }
 };
 
 window.verifyDoc = async function(username, docName, docType, approved) {
@@ -2058,6 +2196,81 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } catch (error) {
                 alert('Server communication error during project upload.');
+            }
+        });
+    }
+
+    // Profile photo upload form and choose file listeners
+    const photoFileTrigger = document.getElementById('photo-file-trigger');
+    const photoFileInput = document.getElementById('photo-file-input');
+    const photoUploadSubmit = document.getElementById('photo-upload-submit');
+    const profilePhotoForm = document.getElementById('profile-photo-form');
+    const settingsPhotoPreview = document.getElementById('settings-photo-preview-container');
+    const settingsPhotoStatus = document.getElementById('settings-photo-status');
+
+    if (photoFileTrigger && photoFileInput) {
+        photoFileTrigger.addEventListener('click', () => photoFileInput.click());
+        photoFileInput.addEventListener('change', () => {
+            if (photoFileInput.files.length > 0) {
+                const file = photoFileInput.files[0];
+                photoFileTrigger.innerText = `📁 ${file.name}`;
+                photoUploadSubmit.disabled = false;
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    if (settingsPhotoPreview) {
+                        settingsPhotoPreview.innerHTML = `<img src="${e.target.result}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+                    }
+                };
+                reader.readAsDataURL(file);
+            } else {
+                photoFileTrigger.innerText = '📁 Choose Photo';
+                photoUploadSubmit.disabled = true;
+            }
+        });
+    }
+
+    if (profilePhotoForm) {
+        profilePhotoForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!photoFileInput.files || photoFileInput.files.length === 0) {
+                alert('Please select a photo first.');
+                return;
+            }
+
+            const file = photoFileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('username', currentUser);
+
+            try {
+                photoUploadSubmit.disabled = true;
+                const originalBtnText = photoUploadSubmit.innerText;
+                photoUploadSubmit.innerText = 'Uploading...';
+
+                const res = await fetch('/api/profile-photo/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                photoUploadSubmit.innerText = originalBtnText;
+
+                if (res.ok) {
+                    photoFileInput.value = '';
+                    photoFileTrigger.innerText = '📁 Choose Photo';
+                    photoUploadSubmit.disabled = true;
+                    if (settingsPhotoStatus) settingsPhotoStatus.innerText = "Custom profile photo active";
+                    
+                    syncStateData();
+                    alert('Profile photo uploaded successfully!');
+                } else {
+                    const err = await res.json();
+                    alert(`Photo upload failed: ${err.detail || 'Unknown error'}`);
+                    photoUploadSubmit.disabled = false;
+                }
+            } catch (error) {
+                photoUploadSubmit.disabled = false;
+                alert('Server communication error during photo upload.');
             }
         });
     }

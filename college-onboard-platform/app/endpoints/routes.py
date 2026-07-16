@@ -114,6 +114,68 @@ async def upload_document_endpoint(
     return {"status": "success", "file_url": file_url}
 
 
+@router.post("/api/profile-photo/upload")
+async def upload_profile_photo_endpoint(
+    file: UploadFile = File(...),
+    username: str = Form(...)
+) -> dict:
+    from supabase import create_client
+    supabase_url = os.getenv("SUPABASE_URL", "").strip()
+    supabase_key = os.getenv("SUPABASE_KEY", "").strip()
+    uploaded_to_supabase = False
+    file_url = ""
+    
+    _, ext = os.path.splitext(file.filename)
+    if not ext:
+        ext = ".jpg"
+    
+    if supabase_url and supabase_key:
+        try:
+            client = create_client(supabase_url, supabase_key)
+            file_bytes = await file.read()
+            file_path = f"{username}/profile_photo{ext}"
+            
+            import mimetypes
+            content_type, _ = mimetypes.guess_type(file.filename)
+            if not content_type:
+                content_type = "image/jpeg"
+                
+            res = client.storage.from_("documents").upload(
+                path=file_path,
+                file=file_bytes,
+                file_options={"cache-control": "3600", "upsert": "true", "content-type": content_type}
+            )
+            file_url = client.storage.from_("documents").get_public_url(file_path)
+            uploaded_to_supabase = True
+        except Exception as e:
+            write_log("UPLOAD_WARNING", f"Supabase storage photo upload failed: {str(e)}. Falling back to local storage.")
+            try:
+                await file.seek(0)
+            except Exception:
+                pass
+            
+    if not uploaded_to_supabase:
+        static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+        user_dir = os.path.join(static_dir, "uploads", username)
+        os.makedirs(user_dir, exist_ok=True)
+        file_path = os.path.join(user_dir, f"profile_photo{ext}")
+        content = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+        file_url = f"/static/uploads/{username}/profile_photo{ext}"
+
+    store = LocalStateStore()
+    state = store.load_state()
+    if not state or "teachers" not in state or username not in state["teachers"]:
+        raise HTTPException(status_code=404, detail="Teacher not found.")
+
+    state["teachers"][username]["profile_photo_url"] = file_url
+    write_log("CANDIDATE_PORTAL", f"Uploaded profile photo for teacher {username} -> {file_url}")
+    store.save_state(state)
+    
+    return {"status": "success", "profile_photo_url": file_url}
+
+
 @router.post("/api/projects/upload")
 async def upload_project_endpoint(
     file: UploadFile = File(...),
@@ -929,6 +991,81 @@ def trigger_action(req: ActionRequest, background_tasks: BackgroundTasks) -> dic
         if len(state["announcements"]) == original_len:
             raise HTTPException(status_code=404, detail="Announcement not found.")
         write_log("ADMIN_AGENT", f"Announcement deleted: {ann_id}")
+
+    elif action == "delete_project":
+        username = payload.get("username")
+        filename = payload.get("filename")
+        if username not in state["teachers"]:
+            raise HTTPException(status_code=404, detail="Teacher not found.")
+        
+        teacher = state["teachers"][username]
+        original_projects = teacher.get("projects", [])
+        
+        updated_projects = [p for p in original_projects if p.get("filename") != filename]
+        if len(updated_projects) == len(original_projects):
+            raise HTTPException(status_code=404, detail="Project not found.")
+            
+        teacher["projects"] = updated_projects
+        write_log("CANDIDATE_PORTAL", f"Deleted project '{filename}' for teacher {username}")
+        
+        # 1. Attempt to delete local file
+        try:
+            static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+            local_file_path = os.path.join(static_dir, "uploads", username, "projects", filename)
+            if os.path.exists(local_file_path):
+                os.remove(local_file_path)
+                write_log("CANDIDATE_PORTAL", f"Deleted local file: {local_file_path}")
+        except Exception as e:
+            write_log("UPLOAD_WARNING", f"Failed to delete local project file: {str(e)}")
+
+        # 2. Attempt to delete from Supabase storage (if configured)
+        supabase_url = os.getenv("SUPABASE_URL", "").strip()
+        supabase_key = os.getenv("SUPABASE_KEY", "").strip()
+        if supabase_url and supabase_key:
+            try:
+                from supabase import create_client
+                client = create_client(supabase_url, supabase_key)
+                file_path = f"{username}/projects/{filename}"
+                client.storage.from_("documents").remove([file_path])
+                write_log("CANDIDATE_PORTAL", f"Deleted Supabase file: {file_path}")
+            except Exception as e:
+                write_log("UPLOAD_WARNING", f"Failed to delete Supabase project file: {str(e)}")
+
+    elif action == "remove_profile_photo":
+        username = payload.get("username")
+        if username not in state["teachers"]:
+            raise HTTPException(status_code=404, detail="Teacher not found.")
+            
+        teacher = state["teachers"][username]
+        photo_url = teacher.get("profile_photo_url", "")
+        if not photo_url:
+            raise HTTPException(status_code=400, detail="No profile photo to remove.")
+            
+        teacher["profile_photo_url"] = ""
+        write_log("ADMIN_AGENT", f"Admin removed profile photo for teacher {username}")
+        
+        try:
+            filename = photo_url.split("/")[-1]
+            static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+            local_file_path = os.path.join(static_dir, "uploads", username, filename)
+            if os.path.exists(local_file_path):
+                os.remove(local_file_path)
+                write_log("ADMIN_AGENT", f"Deleted local profile photo file: {local_file_path}")
+        except Exception as e:
+            write_log("UPLOAD_WARNING", f"Failed to delete local profile photo: {str(e)}")
+
+        supabase_url = os.getenv("SUPABASE_URL", "").strip()
+        supabase_key = os.getenv("SUPABASE_KEY", "").strip()
+        if supabase_url and supabase_key:
+            try:
+                from supabase import create_client
+                client = create_client(supabase_url, supabase_key)
+                filename = photo_url.split("/")[-1]
+                file_path = f"{username}/{filename}"
+                client.storage.from_("documents").remove([file_path])
+                write_log("ADMIN_AGENT", f"Deleted Supabase profile photo file: {file_path}")
+            except Exception as e:
+                write_log("UPLOAD_WARNING", f"Failed to delete Supabase profile photo: {str(e)}")
 
     elif action == "upload_document":
         username = payload.get("username")
