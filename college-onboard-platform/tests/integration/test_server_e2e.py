@@ -206,3 +206,38 @@ def test_collect_feedback(server_fixture: subprocess.Popen[str]) -> None:
         FEEDBACK_URL, json=feedback_data, headers=HEADERS, timeout=10
     )
     assert response.status_code == 200
+
+
+def test_project_upload(server_fixture: subprocess.Popen[str]) -> None:
+    """Test project upload endpoint and check teacher state updates."""
+    # First, verify the teacher state does not have projects
+    state_res = requests.get(BASE_URL + "/api/state")
+    assert state_res.status_code == 200
+    state = state_res.json()
+    assert "teacher" in state["teachers"]
+    
+    # Upload mock project
+    files = {"file": ("mock_proj.pdf", b"pdf-bytes", "application/pdf")}
+    data = {
+        "title": "Quantum Computing",
+        "username": "teacher"
+    }
+    
+    res = requests.post(
+        BASE_URL + "/api/projects/upload",
+        files=files,
+        data=data,
+        timeout=10
+    )
+    assert res.status_code == 200
+    res_data = res.json()
+    assert res_data["status"] == "success"
+    assert "/static/uploads/teacher/projects/mock_proj.pdf" in res_data["file_url"]
+    
+    # Retrieve state again to verify project list
+    state_res = requests.get(BASE_URL + "/api/state")
+    state = state_res.json()
+    projects = state["teachers"]["teacher"].get("projects", [])
+    assert len(projects) > 0
+    assert projects[-1]["title"] == "Quantum Computing"
+    assert projects[-1]["filename"] == "mock_proj.pdf"

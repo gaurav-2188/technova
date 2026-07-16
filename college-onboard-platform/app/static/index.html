@@ -292,8 +292,44 @@
                     <div id="tab-candidate-projects" class="tab-pane hidden">
                         <h2>My Projects & Publications</h2>
                         <p class="section-desc">Academic works and research papers</p>
-                        <div class="empty-projects-box mt-3">
-                            <p class="text-muted">No projects or publications found in record.</p>
+                        
+                        <!-- Add Project Section -->
+                        <div class="project-upload-section mt-4" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px;">
+                            <h3 style="font-size: 1.1rem; margin-top: 0; margin-bottom: 15px; color: #58a6ff; display: flex; align-items: center; gap: 8px;">
+                                <span>➕</span> Add New Project / Publication
+                            </h3>
+                            <form id="project-upload-form" style="display: flex; flex-direction: column; gap: 15px;">
+                                <div style="display: flex; flex-direction: column; gap: 6px;">
+                                    <label for="project-title-input" style="font-size: 0.85rem; color: #8b949e;">Project Title</label>
+                                    <input type="text" id="project-title-input" required placeholder="e.g., Blockchain-based Identity Management"
+                                        style="background: #0d1117; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; padding: 10px; color: #c9d1d9; font-size: 0.9rem; outline: none; width: 100%; box-sizing: border-box;">
+                                </div>
+                                
+                                <div style="display: flex; flex-direction: column; gap: 6px;">
+                                    <label style="font-size: 0.85rem; color: #8b949e;">Project File (PDF / DOC / ZIP)</label>
+                                    <div style="display: flex; gap: 10px; align-items: center;">
+                                        <button type="button" id="project-file-trigger" class="btn btn-secondary" style="margin-top: 0; padding: 8px 16px;">
+                                            📁 Choose File
+                                        </button>
+                                        <span id="project-file-name" style="font-size: 0.85rem; color: #8b949e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">No file selected</span>
+                                        <input type="file" id="project-file-input" required style="display: none;">
+                                    </div>
+                                </div>
+                                
+                                <button type="submit" class="btn btn-primary" style="margin-top: 5px; align-self: flex-start; padding: 10px 24px;">
+                                    Upload Project
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Projects List Section -->
+                        <h3 style="font-size: 1.1rem; margin-top: 30px; margin-bottom: 15px; color: #c9d1d9; display: flex; align-items: center; gap: 8px;">
+                            <span>📂</span> My Uploaded Projects
+                        </h3>
+                        <div id="projects-list-container">
+                            <div class="empty-projects-box mt-3">
+                                <p class="text-muted">No projects or publications found in record.</p>
+                            </div>
                         </div>
                     </div>
 
@@ -425,11 +461,15 @@
                                     <label for="edit-dept">Department</label>
                                     <select id="edit-dept" required>
                                         <option value="" disabled selected>Select Department</option>
-                                        <option value="Computer Science & Engineering">Computer Science & Engineering</option>
-                                        <option value="Artificial Intelligence & Machine Learning">Artificial Intelligence & Machine Learning</option>
+                                        <option value="Computer Science & Engineering">Computer Science & Engineering
+                                        </option>
+                                        <option value="Artificial Intelligence & Machine Learning">Artificial
+                                            Intelligence & Machine Learning</option>
                                         <option value="Mechanical Engineering">Mechanical Engineering</option>
-                                        <option value="Electronics & Communication Engineering">Electronics & Communication Engineering</option>
-                                        <option value="Electrical & Electronics Engineering">Electrical & Electronics Engineering</option>
+                                        <option value="Electronics & Communication Engineering">Electronics &
+                                            Communication Engineering</option>
+                                        <option value="Electrical & Electronics Engineering">Electrical & Electronics
+                                            Engineering</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
@@ -481,11 +521,15 @@
                                 <label for="add-dept">Department</label>
                                 <select id="add-dept" required>
                                     <option value="" disabled selected>Select Department</option>
-                                    <option value="Computer Science & Engineering">Computer Science & Engineering</option>
-                                    <option value="Artificial Intelligence & Machine Learning">Artificial Intelligence & Machine Learning</option>
+                                    <option value="Computer Science & Engineering">Computer Science & Engineering
+                                    </option>
+                                    <option value="Artificial Intelligence & Machine Learning">Artificial Intelligence &
+                                        Machine Learning</option>
                                     <option value="Mechanical Engineering">Mechanical Engineering</option>
-                                    <option value="Electronics & Communication Engineering">Electronics & Communication Engineering</option>
-                                    <option value="Electrical & Electronics Engineering">Electrical & Electronics Engineering</option>
+                                    <option value="Electronics & Communication Engineering">Electronics & Communication
+                                        Engineering</option>
+                                    <option value="Electrical & Electronics Engineering">Electrical & Electronics
+                                        Engineering</option>
                                 </select>
                             </div>
                             <div class="form-group">

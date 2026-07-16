@@ -1,8 +1,14 @@
 import os
+import logging
 import requests
 from dotenv import load_dotenv
 from pinecone import Pinecone
 from app.core.privacy import DataMaskingMiddleware
+
+# Matches below this cosine similarity score are treated as irrelevant and dropped,
+# instead of always stuffing the top_k results into the LLM prompt regardless of
+# how well they actually match the query.
+MIN_RELEVANCE_SCORE = 0.72
 
 class PineconeRAGService:
     def __init__(self):
@@ -38,16 +44,25 @@ class PineconeRAGService:
                 
                 query_res = idx.query(vector=vector, top_k=3, include_metadata=True)
                 
-                # 3. Parse and format retrieved text chunks
+                # 3. Parse and format retrieved text chunks, dropping low-relevance matches
                 context_pieces = []
                 for match in query_res.matches:
+                    score = getattr(match, "score", None)
+                    if score is not None and score < MIN_RELEVANCE_SCORE:
+                        continue
                     if match.metadata and "text" in match.metadata:
                         context_pieces.append(f"- {match.metadata['text'].strip()}")
                 
                 if context_pieces:
                     return f"[Pinecone Index: {index_name}] RETRIEVED REAL-TIME RULES:\n" + "\n".join(context_pieces)
-        except Exception:
-            pass
+                else:
+                    # Nothing cleared the relevance bar - let the caller's LLM answer
+                    # from general knowledge rather than forcing in noisy chunks.
+                    return "[Pinecone Index: working] No sufficiently relevant rules found for this query."
+            else:
+                logging.warning(f"Gemini embedding call returned status {res.status_code}: {res.text[:300]}")
+        except Exception as e:
+            logging.warning(f"Pinecone RAG lookup failed, using fallback brief: {e}")
 
         return self.get_fallback_brief(scrubbed)
 

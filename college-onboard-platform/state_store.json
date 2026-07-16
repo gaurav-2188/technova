@@ -45,10 +45,22 @@
       ],
       "documents": [
         "PhD_Cert.pdf",
-        "Joining_Letter.pdf",
-        "teacher_eligibility_test.pdf"
+        "Joining_Letter.pdf"
       ],
-      "projects": [],
+      "projects": [
+        {
+          "title": "AI in EducationAI in Education",
+          "filename": "snake-cli-plan.md",
+          "file_url": "/static/uploads/teacher/projects/snake-cli-plan.md",
+          "uploaded_at": "2026-07-16 12:33:27"
+        },
+        {
+          "title": "Quantum Computing",
+          "filename": "mock_proj.pdf",
+          "file_url": "/static/uploads/teacher/projects/mock_proj.pdf",
+          "uploaded_at": "2026-07-16 12:33:39"
+        }
+      ],
       "schedule": [
         {
           "day": "Monday",
@@ -71,40 +83,18 @@
       ],
       "policy_brief": "[Pinecone Search @ production] RETRIEVED RULES CONTEXT:\n- Joining guidelines: Submit original verification documents within 30 days.\n- Campus ethics: Absolute professionalism in research and teaching duties.",
       "leave_balance": 28,
-      "onboarding_status_message": "Verified by HR, details forwarded for teacher onboarding",
+      "onboarding_status_message": "Please upload documents in document upload tab",
       "document_statuses": {
-        "aadhaar_card": "approved",
-        "appointment_letter": "approved",
-        "teacher_eligibility_test": "approved"
+        "aadhaar_card": "unuploaded",
+        "appointment_letter": "unuploaded",
+        "teacher_eligibility_test": "unuploaded"
       },
       "document_paths": {
-        "aadhaar_card": "/static/uploads/teacher/aadhaar_card.pdf",
-        "appointment_letter": "/static/uploads/teacher/appointment_letter.pdf",
-        "teacher_eligibility_test": "/static/uploads/teacher/teacher_eligibility_test.pdf"
+        "aadhaar_card": "",
+        "appointment_letter": "",
+        "teacher_eligibility_test": ""
       },
-      "employee_id": "",
-      "candidate_name": "Dr. Jane Doe",
-      "active_stage": "Provisioning-Done",
-      "confirmation_email_sent": false,
-      "credentials_sent": false,
-      "manager_interview_scheduled": false,
-      "chairperson_notified": false,
-      "final_approval_flag": true,
-      "allotment_criteria": {},
-      "it_notified": false,
-      "admin_notified": false,
-      "leaves": [],
-      "pending_tally": 3,
-      "current_stage": "policy_review"
+      "employee_id": ""
     }
-  },
-  "final_approval_flag": true,
-  "active_stage": "Provisioning-Done",
-  "current_stage": "policy_review",
-  "document_statuses": {
-    "aadhaar_card": "approved",
-    "appointment_letter": "approved",
-    "teacher_eligibility_test": "approved"
-  },
-  "onboarding_status_message": "Verified by HR, details forwarded for teacher onboarding"
+  }
 }

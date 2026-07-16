@@ -15,14 +15,21 @@ from app.core.hitl import review_before_execute
 from app.core.privacy import DataMaskingMiddleware
 from app.tools.pinecone_rag import PineconeRAGService
 
-# Set up environment variables for authentication
+# Set up environment variables for ADK's own agent registry / project discovery.
+# NOTE: We deliberately do NOT set GOOGLE_GENAI_USE_VERTEXAI here. Doing so used to
+# force every google-genai Client() in the whole process (including the plain
+# API-key calls in app/endpoints/routes.py) into Vertex AI auth mode, which requires
+# Application Default Credentials + an enabled Vertex AI API on the GCP project.
+# That mismatch was the root cause of the chatbot's "Your default credentials were
+# not found" / 403 SERVICE_DISABLED failures. If a specific piece of code needs
+# Vertex AI, pass vertexai=True explicitly to that one genai.Client(...) call instead
+# of mutating process-wide environment state here.
 try:
     _, project_id = google.auth.default()
 except Exception:
     project_id = "mock-project-id"
-os.environ["GOOGLE_CLOUD_PROJECT"] = project_id
-os.environ["GOOGLE_CLOUD_LOCATION"] = "global"
-os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "True"
+os.environ.setdefault("GOOGLE_CLOUD_PROJECT", project_id)
+os.environ.setdefault("GOOGLE_CLOUD_LOCATION", "global")
 
 # --- 1. Global State Management Schema ---
 class WorkflowState(BaseModel):

@@ -29,4 +29,8 @@ RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY", "")
 
 # Human-in-the-Loop Testing Configuration
-BYPASS_HITL_FOR_TESTING = True
+# WARNING: When True, document verification, interview scheduling, manager approval,
+# and credential/provisioning emails are all auto-approved with no human review.
+# Keep this False except for local/demo testing. Set BYPASS_HITL_FOR_TESTING=true
+# in your .env only when you intentionally want to skip approval gates.
+BYPASS_HITL_FOR_TESTING = os.getenv("BYPASS_HITL_FOR_TESTING", "false").strip().lower() == "true"

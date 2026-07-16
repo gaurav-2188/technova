@@ -13,6 +13,8 @@
 # limitations under the License.
 import os
 import asyncio
+from dotenv import load_dotenv
+load_dotenv(override=True)
 import google.auth
 from fastapi import FastAPI
 from google.adk.cli.fast_api import get_fast_api_app

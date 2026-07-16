@@ -439,6 +439,50 @@ function updateDashboardView() {
             updateSubmitButtonState();
         }
 
+        // Render projects list
+        const projectsListContainer = document.getElementById('projects-list-container');
+        if (projectsListContainer) {
+            projectsListContainer.innerHTML = '';
+            if (teacher.projects && teacher.projects.length > 0) {
+                const grid = document.createElement('div');
+                grid.style.display = 'flex';
+                grid.style.flexDirection = 'column';
+                grid.style.gap = '12px';
+                grid.className = 'mt-3';
+
+                teacher.projects.forEach((proj, idx) => {
+                    const item = document.createElement('div');
+                    item.style.background = 'rgba(255, 255, 255, 0.02)';
+                    item.style.border = '1px solid rgba(255, 255, 255, 0.08)';
+                    item.style.borderRadius = '8px';
+                    item.style.padding = '15px';
+                    item.style.display = 'flex';
+                    item.style.justifyContent = 'space-between';
+                    item.style.alignItems = 'center';
+                    
+                    item.innerHTML = `
+                        <div style="display: flex; flex-direction: column; gap: 4px; text-align: left;">
+                            <span style="font-weight: 600; color: #c9d1d9; font-size: 1rem;">${proj.title}</span>
+                            <span style="font-size: 0.8rem; color: #8b949e;">File: ${proj.filename} | Uploaded: ${proj.uploaded_at || 'N/A'}</span>
+                        </div>
+                        <div>
+                            <button class="btn btn-secondary btn-sm" onclick="window.viewDoc('${proj.file_url}')" style="padding: 6px 16px; font-size: 0.85rem;">
+                                👁️ View
+                            </button>
+                        </div>
+                    `;
+                    grid.appendChild(item);
+                });
+                projectsListContainer.appendChild(grid);
+            } else {
+                projectsListContainer.innerHTML = `
+                    <div class="empty-projects-box mt-3">
+                        <p class="text-muted">No projects or publications found in record.</p>
+                    </div>
+                `;
+            }
+        }
+
     }
 
     // 3. Render HR Views
@@ -1826,3 +1870,68 @@ document.getElementById('admin-seating-modal').addEventListener('click', (e) => 
 window.enableSeatingEdit = function(username) {
     openSeatingModal(username);
 };
+
+// Project upload form and choose file listeners
+document.addEventListener('DOMContentLoaded', () => {
+    const projectFileTrigger = document.getElementById('project-file-trigger');
+    const projectFileInput = document.getElementById('project-file-input');
+    const projectFileName = document.getElementById('project-file-name');
+    const projectUploadForm = document.getElementById('project-upload-form');
+
+    if (projectFileTrigger && projectFileInput) {
+        projectFileTrigger.addEventListener('click', () => projectFileInput.click());
+        projectFileInput.addEventListener('change', () => {
+            if (projectFileInput.files.length > 0) {
+                projectFileName.innerText = projectFileInput.files[0].name;
+            } else {
+                projectFileName.innerText = 'No file selected';
+            }
+        });
+    }
+
+    if (projectUploadForm) {
+        projectUploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const titleInput = document.getElementById('project-title-input');
+            if (!titleInput || !projectFileInput.files || projectFileInput.files.length === 0) {
+                alert('Please provide both a title and a file.');
+                return;
+            }
+
+            const file = projectFileInput.files[0];
+            const title = titleInput.value.trim();
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('title', title);
+            formData.append('username', currentUser);
+
+            try {
+                const submitBtn = projectUploadForm.querySelector('button[type="submit"]');
+                const originalBtnText = submitBtn.innerText;
+                submitBtn.disabled = true;
+                submitBtn.innerText = 'Uploading...';
+
+                const res = await fetch('/api/projects/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                submitBtn.disabled = false;
+                submitBtn.innerText = originalBtnText;
+
+                if (res.ok) {
+                    titleInput.value = '';
+                    projectFileInput.value = '';
+                    projectFileName.innerText = 'No file selected';
+                    syncStateData();
+                } else {
+                    const err = await res.json();
+                    alert(`Upload failed: ${err.detail || 'Unknown error'}`);
+                }
+            } catch (error) {
+                alert('Server communication error during project upload.');
+            }
+        });
+    }
+});

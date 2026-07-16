@@ -54,17 +54,9 @@ async def upload_document_endpoint(
     from supabase import create_client
     supabase_url = os.getenv("SUPABASE_URL", "").strip()
     supabase_key = os.getenv("SUPABASE_KEY", "").strip()
-    
-    if not supabase_url or not supabase_key:
-        static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
-        user_dir = os.path.join(static_dir, "uploads", username)
-        os.makedirs(user_dir, exist_ok=True)
-        file_path = os.path.join(user_dir, f"{doc_type}.pdf")
-        content = await file.read()
-        with open(file_path, "wb") as f:
-            f.write(content)
-        file_url = f"/static/uploads/{username}/{doc_type}.pdf"
-    else:
+    uploaded_to_supabase = False
+    file_url = ""
+    if supabase_url and supabase_key:
         try:
             client = create_client(supabase_url, supabase_key)
             file_bytes = await file.read()
@@ -76,9 +68,23 @@ async def upload_document_endpoint(
                 file_options={"cache-control": "3600", "upsert": "true", "content-type": "application/pdf"}
             )
             file_url = client.storage.from_("documents").get_public_url(file_path)
+            uploaded_to_supabase = True
         except Exception as e:
-            write_log("UPLOAD_ERROR", f"Supabase storage upload failed: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Supabase storage upload failed: {str(e)}")
+            write_log("UPLOAD_WARNING", f"Supabase storage upload failed: {str(e)}. Falling back to local storage.")
+            try:
+                await file.seek(0)
+            except Exception:
+                pass
+            
+    if not uploaded_to_supabase:
+        static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+        user_dir = os.path.join(static_dir, "uploads", username)
+        os.makedirs(user_dir, exist_ok=True)
+        file_path = os.path.join(user_dir, f"{doc_type}.pdf")
+        content = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+        file_url = f"/static/uploads/{username}/{doc_type}.pdf"
 
     store = LocalStateStore()
     state = store.load_state()
@@ -103,6 +109,70 @@ async def upload_document_endpoint(
 
     state["teachers"][username].update(ws.model_dump())
     write_log("CANDIDATE_PORTAL", f"Uploaded document: {file.filename} -> {file_url} for teacher {username}")
+    store.save_state(state)
+    
+    return {"status": "success", "file_url": file_url}
+
+
+@router.post("/api/projects/upload")
+async def upload_project_endpoint(
+    file: UploadFile = File(...),
+    title: str = Form(...),
+    username: str = Form(...)
+) -> dict:
+    from supabase import create_client
+    supabase_url = os.getenv("SUPABASE_URL", "").strip()
+    supabase_key = os.getenv("SUPABASE_KEY", "").strip()
+    uploaded_to_supabase = False
+    file_url = ""
+    if supabase_url and supabase_key:
+        try:
+            client = create_client(supabase_url, supabase_key)
+            file_bytes = await file.read()
+            file_path = f"{username}/projects/{file.filename}"
+            
+            res = client.storage.from_("documents").upload(
+                path=file_path,
+                file=file_bytes,
+                file_options={"cache-control": "3600", "upsert": "true"}
+            )
+            file_url = client.storage.from_("documents").get_public_url(file_path)
+            uploaded_to_supabase = True
+        except Exception as e:
+            write_log("UPLOAD_WARNING", f"Supabase storage project upload failed: {str(e)}. Falling back to local storage.")
+            try:
+                await file.seek(0)
+            except Exception:
+                pass
+            
+    if not uploaded_to_supabase:
+        static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+        user_dir = os.path.join(static_dir, "uploads", username, "projects")
+        os.makedirs(user_dir, exist_ok=True)
+        file_path = os.path.join(user_dir, file.filename)
+        content = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+        file_url = f"/static/uploads/{username}/projects/{file.filename}"
+
+    store = LocalStateStore()
+    state = store.load_state()
+    if not state or "teachers" not in state or username not in state["teachers"]:
+        raise HTTPException(status_code=404, detail="Teacher not found.")
+
+    teacher = state["teachers"][username]
+    if "projects" not in teacher:
+        teacher["projects"] = []
+    
+    new_project = {
+        "title": title,
+        "filename": file.filename,
+        "file_url": file_url,
+        "uploaded_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    
+    teacher["projects"].append(new_project)
+    write_log("CANDIDATE_PORTAL", f"Uploaded project: '{title}' ({file.filename}) for teacher {username}")
     store.save_state(state)
     
     return {"status": "success", "file_url": file_url}
