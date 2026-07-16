@@ -1192,6 +1192,52 @@ class TimetableClassSchema(BaseModel):
     class Config:
         populate_by_name = True
 
+# In-memory holidays cache
+holidays_cache = {}
+
+@router.get("/api/calendar/holidays")
+async def get_calendar_holidays() -> List[dict]:
+    import httpx
+    current_year = datetime.datetime.now().year
+    if current_year < 2026:
+        current_year = 2026
+
+    if current_year in holidays_cache:
+        print(f"[HOLIDAY CACHE] Returning cached holidays for year {current_year}")
+        return holidays_cache[current_year]
+
+    fallback_holidays = [
+        {"date": f"{current_year}-01-26", "name": "Republic Day", "localName": "Republic Day"},
+        {"date": f"{current_year}-03-02", "name": "Holi", "localName": "Holi"},
+        {"date": f"{current_year}-04-02", "name": "Good Friday", "localName": "Good Friday"},
+        {"date": f"{current_year}-04-14", "name": "Ambedkar Jayanti", "localName": "Ambedkar Jayanti"},
+        {"date": f"{current_year}-05-01", "name": "May Day", "localName": "May Day"},
+        {"date": f"{current_year}-08-15", "name": "Independence Day", "localName": "Independence Day"},
+        {"date": f"{current_year}-09-04", "name": "Janmashtami", "localName": "Janmashtami"},
+        {"date": f"{current_year}-10-02", "name": "Gandhi Jayanti", "localName": "Gandhi Jayanti"},
+        {"date": f"{current_year}-10-20", "name": "Dussehra", "localName": "Dussehra"},
+        {"date": f"{current_year}-11-08", "name": "Diwali", "localName": "Diwali"},
+        {"date": f"{current_year}-12-25", "name": "Christmas Day", "localName": "Christmas Day"}
+    ]
+
+    url = f"https://date.nager.at/api/v3/PublicHolidays/{current_year}/IN"
+    print(f"[HOLIDAY API] Fetching holidays asynchronously from {url}...")
+    try:
+        async with httpx.AsyncClient() as client:
+            res = await client.get(url, timeout=10.0)
+            if res.status_code == 200:
+                data = res.json()
+                if data and len(data) > 0:
+                    holidays_cache[current_year] = data
+                    print(f"[HOLIDAY API] Successfully fetched and cached {len(data)} holidays.")
+                    return data
+    except Exception as e:
+        print(f"[HOLIDAY API ERROR] Failed to fetch holidays: {e}")
+
+    holidays_cache[current_year] = fallback_holidays
+    return fallback_holidays
+
+
 # ------------------ MEETINGS ENDPOINTS ------------------
 @router.get("/api/calendar/meetings")
 def get_calendar_meetings() -> List[dict]:
@@ -1206,7 +1252,7 @@ def get_calendar_meetings() -> List[dict]:
     if supabase_url and supabase_key:
         try:
             client = create_client(supabase_url, supabase_key)
-            res = client.table("meetings").select("*").execute()
+            res = client.table("meetings").select("id, title, description, event_date, event_time, departments, department").execute()
             if res.data:
                 for m in res.data:
                     m["date"] = m.get("event_date")
@@ -1393,7 +1439,7 @@ def get_calendar_timetable() -> List[dict]:
     if supabase_url and supabase_key:
         try:
             client = create_client(supabase_url, supabase_key)
-            res = client.table("timetable_classes").select("*").execute()
+            res = client.table("timetable_classes").select("id, subject_name, time_slot, classroom, day_of_week").execute()
             if res.data:
                 for c in res.data:
                     c["subject"] = c.get("subject_name")

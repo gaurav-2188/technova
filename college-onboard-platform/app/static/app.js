@@ -2462,6 +2462,34 @@ async function renderCalendar() {
     // Get holidays for the current calendar year
     const yearHolidays = await fetchPublicHolidays(calendarYear);
 
+    // Optimize Lookup: Pre-group items to avoid array filter lookups in loop
+    const meetingsByDate = {};
+    academicEvents.forEach(e => {
+        const d = e.date || e.event_date;
+        if (d) {
+            if (!meetingsByDate[d]) meetingsByDate[d] = [];
+            meetingsByDate[d].push(e);
+        }
+    });
+
+    const holidaysByDate = {};
+    yearHolidays.forEach(h => {
+        const d = h.date;
+        if (d) {
+            if (!holidaysByDate[d]) holidaysByDate[d] = [];
+            holidaysByDate[d].push(h);
+        }
+    });
+
+    const classesByDay = {};
+    teacherSchedule.forEach(c => {
+        const day = c.day || c.day_of_week;
+        if (day) {
+            if (!classesByDay[day]) classesByDay[day] = [];
+            classesByDay[day].push(c);
+        }
+    });
+
     // Days in current month
     const totalDays = new Date(calendarYear, calendarMonth + 1, 0).getDate();
     
@@ -2472,7 +2500,7 @@ async function renderCalendar() {
     // Fill preceding empty cells
     for (let i = 0; i < firstDayIndex; i++) {
         const emptyCell = document.createElement('div');
-        emptyCell.className = 'calendar-day-cell other-month opacity-20 pointer-events-none h-32 min-h-[120px] border border-neutral-800';
+        emptyCell.className = 'calendar-day-cell other-month opacity-20 pointer-events-none h-32 min-h-[120px] w-full border border-neutral-800 overflow-hidden';
         daysGrid.appendChild(emptyCell);
     }
 
@@ -2483,7 +2511,7 @@ async function renderCalendar() {
     // Render cells for days
     for (let day = 1; day <= totalDays; day++) {
         const cell = document.createElement('div');
-        cell.className = 'calendar-day-cell h-32 min-h-[120px] p-2 border border-neutral-800/60 rounded flex flex-col justify-between transition-all';
+        cell.className = 'calendar-day-cell h-32 min-h-[120px] w-full p-2 border border-neutral-800/60 rounded flex flex-col justify-between transition-all overflow-hidden';
 
         // Check if Sunday
         const dateObj = new Date(calendarYear, calendarMonth, day);
@@ -2514,8 +2542,8 @@ async function renderCalendar() {
                 let html = '';
                 if (calendarFilter === 'meetings') {
                     titleEl.innerText = `Schedule for ${dateStr}`;
-                    const dayAcademicEvents = academicEvents.filter(e => e.date === dateStr);
-                    const dayHolidays = yearHolidays.filter(h => h.date === dateStr);
+                    const dayAcademicEvents = meetingsByDate[dateStr] || [];
+                    const dayHolidays = holidaysByDate[dateStr] || [];
 
                     if (dayAcademicEvents.length === 0 && dayHolidays.length === 0) {
                         html = '<p class="text-neutral-400 text-center py-4">No meetings or events scheduled for this day.</p>';
@@ -2544,8 +2572,8 @@ async function renderCalendar() {
                     }
                 } else {
                     titleEl.innerText = `Classes on ${weekdayName} (${dateStr})`;
-                    const dayClasses = teacherSchedule.filter(s => s.day === weekdayName);
-                    const dayHolidays = yearHolidays.filter(h => h.date === dateStr);
+                    const dayClasses = classesByDay[weekdayName] || [];
+                    const dayHolidays = holidaysByDate[dateStr] || [];
 
                     if (dayHolidays.length > 0) {
                         dayHolidays.forEach(h => {
@@ -2592,7 +2620,7 @@ async function renderCalendar() {
         eventsContainer.className = 'calendar-events-list flex flex-col gap-1 overflow-y-auto max-h-[80px] mt-1';
 
         // Public holidays displayed in both views
-        const dayHolidays = yearHolidays.filter(h => h.date === dateStr);
+        const dayHolidays = holidaysByDate[dateStr] || [];
         dayHolidays.forEach(h => {
             const badge = document.createElement('span');
             badge.className = 'calendar-event-badge bg-red-900/40 text-red-400 px-1.5 py-0.5 rounded text-[10px] truncate whitespace-nowrap overflow-hidden max-w-full block border border-red-500/20';
@@ -2603,7 +2631,7 @@ async function renderCalendar() {
 
         if (calendarFilter === 'meetings') {
             // Filter academic events / meetings
-            const dayAcademicEvents = academicEvents.filter(e => e.date === dateStr);
+            const dayAcademicEvents = meetingsByDate[dateStr] || [];
             dayAcademicEvents.forEach(e => {
                 const badge = document.createElement('span');
                 badge.className = 'calendar-event-badge bg-blue-800/30 text-blue-400 px-1.5 py-0.5 rounded text-[10px] truncate whitespace-nowrap overflow-hidden max-w-full block border border-blue-500/20';
@@ -2614,7 +2642,7 @@ async function renderCalendar() {
         } else {
             // Filter class timetable
             if (!isSunday) {
-                const dayClasses = teacherSchedule.filter(s => s.day === weekdayName);
+                const dayClasses = classesByDay[weekdayName] || [];
                 dayClasses.forEach(c => {
                     const badge = document.createElement('span');
                     badge.className = 'calendar-event-badge bg-purple-800/30 text-purple-400 px-1.5 py-0.5 rounded text-[10px] truncate whitespace-nowrap overflow-hidden max-w-full block border border-purple-500/20';
@@ -2809,6 +2837,34 @@ async function renderAdminCalendar() {
     // Get holidays for the current calendar year
     const yearHolidays = await fetchPublicHolidays(adminCalendarYear);
 
+    // Optimize Lookup: Pre-group items to avoid array filter lookups in loop
+    const meetingsByDate = {};
+    adminEvents.forEach(e => {
+        const d = e.date || e.event_date;
+        if (d) {
+            if (!meetingsByDate[d]) meetingsByDate[d] = [];
+            meetingsByDate[d].push(e);
+        }
+    });
+
+    const holidaysByDate = {};
+    yearHolidays.forEach(h => {
+        const d = h.date;
+        if (d) {
+            if (!holidaysByDate[d]) holidaysByDate[d] = [];
+            holidaysByDate[d].push(h);
+        }
+    });
+
+    const classesByDay = {};
+    teacherSchedule.forEach(c => {
+        const day = c.day || c.day_of_week;
+        if (day) {
+            if (!classesByDay[day]) classesByDay[day] = [];
+            classesByDay[day].push(c);
+        }
+    });
+
     // Days in current month
     const totalDays = new Date(adminCalendarYear, adminCalendarMonth + 1, 0).getDate();
     
@@ -2819,7 +2875,7 @@ async function renderAdminCalendar() {
     // Fill preceding empty cells
     for (let i = 0; i < firstDayIndex; i++) {
         const emptyCell = document.createElement('div');
-        emptyCell.className = 'calendar-day-cell other-month opacity-20 pointer-events-none h-32 min-h-[120px] border border-neutral-800';
+        emptyCell.className = 'calendar-day-cell other-month opacity-20 pointer-events-none h-32 min-h-[120px] w-full border border-neutral-800 overflow-hidden';
         daysGrid.appendChild(emptyCell);
     }
 
@@ -2830,7 +2886,7 @@ async function renderAdminCalendar() {
     // Render cells for days
     for (let day = 1; day <= totalDays; day++) {
         const cell = document.createElement('div');
-        cell.className = 'calendar-day-cell admin-day-cell h-32 min-h-[120px] p-2 border border-neutral-800/60 rounded flex flex-col justify-between transition-all';
+        cell.className = 'calendar-day-cell admin-day-cell h-32 min-h-[120px] w-full p-2 border border-neutral-800/60 rounded flex flex-col justify-between transition-all overflow-hidden';
 
         // Check if Sunday
         const dateObj = new Date(adminCalendarYear, adminCalendarMonth, day);
@@ -2874,7 +2930,7 @@ async function renderAdminCalendar() {
         eventsContainer.className = 'calendar-events-list flex flex-col gap-1 overflow-y-auto max-h-[80px] mt-1';
 
         // Public holidays displayed in both views
-        const dayHolidays = yearHolidays.filter(h => h.date === dateStr);
+        const dayHolidays = holidaysByDate[dateStr] || [];
         dayHolidays.forEach(h => {
             const badge = document.createElement('span');
             badge.className = 'calendar-event-badge bg-red-900/40 text-red-400 px-1.5 py-0.5 rounded text-[10px] truncate whitespace-nowrap overflow-hidden max-w-full block border border-red-500/20';
@@ -2885,7 +2941,7 @@ async function renderAdminCalendar() {
 
         if (adminCalendarFilter === 'meetings') {
             // Filter academic events / meetings
-            const dayAcademicEvents = adminEvents.filter(e => e.date === dateStr);
+            const dayAcademicEvents = meetingsByDate[dateStr] || [];
             dayAcademicEvents.forEach(e => {
                 const badge = document.createElement('span');
                 badge.className = 'calendar-event-badge admin-event-badge bg-blue-800/30 text-blue-400 px-1.5 py-0.5 rounded text-[10px] truncate whitespace-nowrap overflow-hidden max-w-full block border border-blue-500/20';
@@ -2902,7 +2958,7 @@ async function renderAdminCalendar() {
         } else {
             // Filter class timetable
             if (!isSunday) {
-                const dayClasses = teacherSchedule.filter(s => s.day === weekdayName);
+                const dayClasses = classesByDay[weekdayName] || [];
                 dayClasses.forEach(c => {
                     const badge = document.createElement('span');
                     badge.className = 'calendar-event-badge admin-event-badge bg-purple-800/30 text-purple-400 px-1.5 py-0.5 rounded text-[10px] truncate whitespace-nowrap overflow-hidden max-w-full block border border-purple-500/20';
