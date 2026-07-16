@@ -326,6 +326,7 @@ def chatbot_endpoint(req: ChatRequest):
             prompt = (
                 f"You are a helpful PESU AI. Use the following Pinecone RAG context to answer the user's query.\n"
                 f"Make sure to use relevant emojis where appropriate in your response to make it engaging and friendly.\n"
+                f"Ensure the response is beautifully formatted, well-aligned, and easily readable. Include clear section headers, double newlines between paragraphs, bold text, italics, and clean bullet lists (* or -) where appropriate to make it visually structured and easy to digest.\n"
                 f"If you answer using the retrieved context guidelines, always append '[Source: Pinecone Database]' to make it clear that the response refers to retrieved records.\n"
                 f"If the context does not contain enough info to answer the query, reply to the best of your knowledge, specify that it is general info, and do not append the citation.\n\n"
                 f"Context:\n{rules_context}\n\n"
