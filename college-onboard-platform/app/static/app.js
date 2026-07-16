@@ -2546,7 +2546,7 @@ async function renderCalendar() {
     // Render cells for days
     for (let day = 1; day <= totalDays; day++) {
         const cell = document.createElement('div');
-        cell.className = 'calendar-day-cell w-full aspect-square p-2 border border-neutral-800/60 rounded relative flex flex-col justify-between transition-all overflow-hidden';
+        cell.className = 'calendar-day-cell w-full aspect-square border border-neutral-800/60 rounded relative transition-all overflow-hidden';
 
         // Check if Sunday
         const dateObj = new Date(calendarYear, calendarMonth, day);
@@ -2644,11 +2644,15 @@ async function renderCalendar() {
             });
         }
 
+        // Inner container absolutely positioned to fill the square cell without stretching it
+        const innerContainer = document.createElement('div');
+        innerContainer.className = 'absolute inset-0 p-2 flex flex-col justify-between overflow-hidden';
+
         // Top left number label
         const numberLabel = document.createElement('div');
         numberLabel.className = 'calendar-day-number text-left text-xs font-semibold';
         numberLabel.innerText = day;
-        cell.appendChild(numberLabel);
+        innerContainer.appendChild(numberLabel);
 
         // Container for events in this cell
         const eventsContainer = document.createElement('div');
@@ -2688,7 +2692,8 @@ async function renderCalendar() {
             }
         }
 
-        cell.appendChild(eventsContainer);
+        innerContainer.appendChild(eventsContainer);
+        cell.appendChild(innerContainer);
         daysGrid.appendChild(cell);
     }
 }
@@ -2921,7 +2926,7 @@ async function renderAdminCalendar() {
     // Render cells for days
     for (let day = 1; day <= totalDays; day++) {
         const cell = document.createElement('div');
-        cell.className = 'calendar-day-cell admin-day-cell w-full aspect-square p-2 border border-neutral-800/60 rounded relative flex flex-col justify-between transition-all overflow-hidden';
+        cell.className = 'calendar-day-cell admin-day-cell w-full aspect-square border border-neutral-800/60 rounded relative transition-all overflow-hidden';
 
         // Check if Sunday
         const dateObj = new Date(adminCalendarYear, adminCalendarMonth, day);
@@ -2954,11 +2959,15 @@ async function renderAdminCalendar() {
             });
         }
 
+        // Inner container absolutely positioned to fill the square cell without stretching it
+        const innerContainer = document.createElement('div');
+        innerContainer.className = 'absolute inset-0 p-2 flex flex-col justify-between overflow-hidden';
+
         // Top left number label
         const numberLabel = document.createElement('div');
         numberLabel.className = 'calendar-day-number text-left text-xs font-semibold';
         numberLabel.innerText = day;
-        cell.appendChild(numberLabel);
+        innerContainer.appendChild(numberLabel);
 
         // Container for events in this cell
         const eventsContainer = document.createElement('div');
@@ -3010,7 +3019,8 @@ async function renderAdminCalendar() {
             }
         }
 
-        cell.appendChild(eventsContainer);
+        innerContainer.appendChild(eventsContainer);
+        cell.appendChild(innerContainer);
         daysGrid.appendChild(cell);
     }
 }

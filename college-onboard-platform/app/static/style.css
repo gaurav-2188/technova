@@ -1166,7 +1166,7 @@ body {
 }
 
 .calendar-day-cell {
-    min-height: 110px;
+    min-height: 0;
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 8px;
@@ -1252,7 +1252,7 @@ body {
         font-size: 0.75rem;
     }
     .calendar-day-cell {
-        min-height: 80px;
+        min-height: 0;
         padding: 4px;
     }
     .calendar-day-header {
