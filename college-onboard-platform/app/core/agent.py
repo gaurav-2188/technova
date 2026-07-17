@@ -4,7 +4,6 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Any
 
 from google.adk.apps import App, ResumabilityConfig
-from google.adk.agents import LlmAgent
 from google.adk.agents.context import Context
 from google.adk.events.event import Event
 from google.adk.events.request_input import RequestInput
