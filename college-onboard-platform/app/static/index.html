@@ -95,6 +95,7 @@
                             <button class="nav-tab" data-tab="candidate-seating">Seating Info</button>
                             <button class="nav-tab" data-tab="candidate-documents">Submit Documents</button>
                             <button class="nav-tab" data-tab="candidate-projects">Projects & Publications</button>
+                            <button class="nav-tab" data-tab="candidate-bank">Bank Details</button>
                             <button class="nav-tab" data-tab="candidate-settings">Settings</button>
                         </div>
 
@@ -103,6 +104,7 @@
                             <button class="nav-tab active" data-tab="hr-teachers-list">Manage Teachers</button>
                             <button class="nav-tab" data-tab="hr-verification" id="hr-verification-tab">Verification
                                 [0]</button>
+                            <button class="nav-tab" data-tab="hr-salary">Salary Management</button>
                             <button class="nav-tab" data-tab="hr-add-teacher">Add New Teacher</button>
                         </div>
 
@@ -376,6 +378,69 @@
                         </div>
                     </div>
 
+                    <!-- Bank Details View -->
+                    <div id="tab-candidate-bank" class="tab-pane hidden">
+                        <h2>Bank Details & Salary History</h2>
+                        <p class="section-desc">Manage your bank account for salary credits</p>
+
+                        <div class="bank-details-section mt-4" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px;">
+                            <div style="background: rgba(255, 193, 7, 0.1); border-left: 4px solid #ffc107; padding: 12px 15px; margin-bottom: 20px; border-radius: 4px;">
+                                <p style="margin: 0; font-size: 0.9rem; color: #ffeb3b;">
+                                    <strong>Note:</strong> You must first create a bank account with <strong>Union Bank</strong> before sharing your details here.
+                                </p>
+                            </div>
+                            
+                            <h3 style="font-size: 1.1rem; margin-top: 0; margin-bottom: 15px; color: #58a6ff; display: flex; align-items: center; gap: 8px;">
+                                <span>🏦</span> Update Bank Account
+                            </h3>
+                            <form id="bank-details-form" style="display: flex; flex-direction: column; gap: 15px;">
+                                <div style="display: flex; flex-direction: column; gap: 6px;">
+                                    <label for="bank-account-name" style="font-size: 0.85rem; color: #8b949e;">Account Holder Name</label>
+                                    <input type="text" id="bank-account-name" required
+                                        style="background: #0d1117; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; padding: 10px; color: #c9d1d9; font-size: 0.9rem; outline: none; width: 100%; box-sizing: border-box;">
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 6px;">
+                                    <label for="bank-account-number" style="font-size: 0.85rem; color: #8b949e;">Account Number</label>
+                                    <input type="text" id="bank-account-number" required
+                                        style="background: #0d1117; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; padding: 10px; color: #c9d1d9; font-size: 0.9rem; outline: none; width: 100%; box-sizing: border-box;">
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 6px;">
+                                    <label for="bank-ifsc" style="font-size: 0.85rem; color: #8b949e;">IFSC Code</label>
+                                    <input type="text" id="bank-ifsc" required
+                                        style="background: #0d1117; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; padding: 10px; color: #c9d1d9; font-size: 0.9rem; outline: none; width: 100%; box-sizing: border-box;">
+                                </div>
+                                
+                                <div style="display: flex; gap: 10px; margin-top: 5px;">
+                                    <button type="button" id="bank-edit-btn" class="btn btn-secondary" style="padding: 10px 24px;">
+                                        Edit Details
+                                    </button>
+                                    <button type="submit" id="bank-save-btn" class="btn btn-primary" style="padding: 10px 24px;">
+                                        Save Details
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <h3 style="font-size: 1.1rem; margin-top: 30px; margin-bottom: 15px; color: #c9d1d9; display: flex; align-items: center; gap: 8px;">
+                            <span>💸</span> Salary History (Last 6 Months)
+                        </h3>
+                        <div class="attendance-table-wrapper mt-3">
+                            <table class="record-table">
+                                <thead>
+                                    <tr>
+                                        <th>Month/Year</th>
+                                        <th>Amount Credited</th>
+                                        <th>Transaction ID</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="salary-history-body">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <!-- Settings View -->
                     <div id="tab-candidate-settings" class="tab-pane hidden">
                         <h2>Settings</h2>
@@ -519,6 +584,37 @@
                     </div>
 
                     <!-- ==================== HR VIEWS ==================== -->
+                    
+                    <!-- HR Salary Management View -->
+                    <div id="tab-hr-salary" class="tab-pane hidden">
+                        <h2>Salary Management</h2>
+                        <p class="section-desc">Disburse salaries based on teacher attendance</p>
+                        
+                        <div class="form-group mt-3" style="max-width: 400px; margin-bottom: 15px;">
+                            <input type="text" id="hr-salary-search" class="form-control"
+                                placeholder="Search by Teacher Name or ID..."
+                                style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 10px 14px; border-radius: 8px; width: 100%;">
+                        </div>
+
+                        <div class="attendance-table-wrapper mt-4">
+                            <table class="record-table">
+                                <thead>
+                                    <tr>
+                                        <th>Teacher Name</th>
+                                        <th>Employee ID</th>
+                                        <th>Absent Days</th>
+                                        <th>Present Days</th>
+                                        <th>Net Salary</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="hr-salary-list-body">
+                                    <!-- Dynamic rows for salary disbursement -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
                     <!-- Manage Teachers List View -->
                     <div id="tab-hr-teachers-list" class="tab-pane hidden">
                         <h2>Manage Teachers</h2>

@@ -3734,3 +3734,236 @@ function setupAdminTimetableFormListener() {
         });
     }
 }
+
+// ==========================================
+// BANK DETAILS & SALARY HISTORY LOGIC
+// ==========================================
+
+function toggleBankInputs(disabled) {
+    document.getElementById('bank-account-name').disabled = disabled;
+    document.getElementById('bank-account-number').disabled = disabled;
+    document.getElementById('bank-ifsc').disabled = disabled;
+    const saveBtn = document.getElementById('bank-save-btn');
+    if(saveBtn) saveBtn.style.display = disabled ? 'none' : 'block';
+}
+
+async function loadBankDetails() {
+    if (!currentUser) return;
+    try {
+        const res = await fetch(`/api/teacher/${currentUser}/bank`);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.bank_details && data.bank_details.account_number) {
+                document.getElementById('bank-account-name').value = data.bank_details.account_name || '';
+                document.getElementById('bank-account-number').value = data.bank_details.account_number || '';
+                document.getElementById('bank-ifsc').value = data.bank_details.ifsc_code || '';
+                toggleBankInputs(true);
+            } else {
+                toggleBankInputs(false);
+            }
+        }
+    } catch (e) {
+        console.error("Failed to load bank details", e);
+    }
+}
+
+async function loadSalaryHistory() {
+    if (!currentUser) return;
+    try {
+        const res = await fetch(`/api/teacher/${currentUser}/salary`);
+        if (res.ok) {
+            const data = await res.json();
+            const tbody = document.getElementById('salary-history-body');
+            tbody.innerHTML = '';
+            
+            if (data.history && data.history.length > 0) {
+                data.history.forEach(record => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${record.month}</td>
+                        <td style="color: #3fb950; font-weight: 500;">${record.amount}</td>
+                        <td style="font-family: monospace; color: #8b949e;">${record.transaction_id}</td>
+                        <td><span class="badge" style="background: rgba(46, 160, 67, 0.15); color: #3fb950; border: 1px solid rgba(46, 160, 67, 0.4);">${record.status}</span></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } else {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No salary history available.</td></tr>';
+            }
+        }
+    } catch (e) {
+        console.error("Failed to load salary history", e);
+    }
+}
+
+// HR Salary Management Logic
+async function loadHrSalaryList() {
+    try {
+        const res = await fetch('/api/state');
+        if (!res.ok) throw new Error('Failed to fetch state');
+        const data = await res.json();
+        
+        const tbody = document.getElementById('hr-salary-list-body');
+        if(!tbody) return;
+        tbody.innerHTML = '';
+        
+        if (!data.teachers || Object.keys(data.teachers).length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No teachers found.</td></tr>';
+            return;
+        }
+
+        const currentMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
+        const BASE_WORKING_DAYS = 22; // Assumed fixed working days
+        const PER_DAY_WAGE = 3400;
+
+        for (const [username, details] of Object.entries(data.teachers)) {
+            // Apply search filter if there's a search term
+            const searchInput = document.getElementById('hr-salary-search');
+            const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
+            const tName = (details.name || '').toLowerCase();
+            const tId = (details.emp_id || username).toLowerCase();
+            
+            if (searchTerm && !tName.includes(searchTerm) && !tId.includes(searchTerm)) {
+                continue;
+            }
+
+            let absentThisMonth = 0;
+            if (details.attendance) {
+                absentThisMonth = details.attendance.filter(a => a.date.startsWith(currentMonth)).length;
+            }
+            const presentDays = Math.max(0, BASE_WORKING_DAYS - absentThisMonth);
+            const netSalary = presentDays * PER_DAY_WAGE;
+            
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${details.name}</td>
+                <td>${details.emp_id || username}</td>
+                <td style="color: #f85149;">${absentThisMonth}</td>
+                <td style="color: #3fb950;">${presentDays}</td>
+                <td style="font-weight: 500;">₹ ${netSalary.toLocaleString()}</td>
+                <td>
+                    <button class="btn btn-sm btn-primary push-salary-btn" data-username="${username}" data-salary="${netSalary}">Push Salary</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        }
+        
+        document.querySelectorAll('.push-salary-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const targetUsername = e.target.dataset.username;
+                const salary = e.target.dataset.salary;
+                e.target.disabled = true;
+                e.target.innerText = 'Pushing...';
+                
+                try {
+                    const monthStr = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+                    const payload = {
+                        username: targetUsername,
+                        amount: `₹ ${parseInt(salary).toLocaleString()}`,
+                        month: monthStr
+                    };
+                    
+                    const res = await fetch('/api/hr/salary/push', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (res.ok) {
+                        e.target.innerText = 'Pushed';
+                        e.target.classList.remove('btn-primary');
+                        e.target.classList.add('btn-secondary');
+                    } else {
+                        alert('Failed to push salary');
+                        e.target.disabled = false;
+                        e.target.innerText = 'Push Salary';
+                    }
+                } catch(err) {
+                    console.error(err);
+                    e.target.disabled = false;
+                    e.target.innerText = 'Push Salary';
+                }
+            });
+        });
+
+    } catch (e) {
+        console.error("Failed to load HR salary list", e);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const bankForm = document.getElementById('bank-details-form');
+    if (bankForm) {
+        bankForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!currentUser) return;
+            
+            const submitBtn = document.getElementById('bank-save-btn');
+            const originalText = submitBtn.innerText;
+            submitBtn.innerText = 'Saving...';
+            submitBtn.disabled = true;
+            
+            const payload = {
+                account_name: document.getElementById('bank-account-name').value,
+                account_number: document.getElementById('bank-account-number').value,
+                ifsc_code: document.getElementById('bank-ifsc').value,
+                bank_name: "Union Bank" // Defaulting backend value
+            };
+            
+            try {
+                const res = await fetch(`/api/teacher/${currentUser}/bank`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (res.ok) {
+                    submitBtn.innerText = 'Saved';
+                    setTimeout(() => { submitBtn.innerText = originalText; }, 2000);
+                    toggleBankInputs(true);
+                } else {
+                    alert('Failed to update bank details.');
+                    submitBtn.innerText = originalText;
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error updating bank details.');
+                submitBtn.innerText = originalText;
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+        
+        const editBtn = document.getElementById('bank-edit-btn');
+        if (editBtn) {
+            editBtn.addEventListener('click', () => {
+                toggleBankInputs(false);
+            });
+        }
+    }
+
+    // Add listener to the bank tab to load data when clicked
+    const bankTabBtn = document.querySelector('.nav-tab[data-tab="candidate-bank"]');
+    if (bankTabBtn) {
+        bankTabBtn.addEventListener('click', () => {
+            loadBankDetails();
+            loadSalaryHistory();
+        });
+    }
+    
+    // Add listener for HR salary tab
+    const hrSalaryTabBtn = document.querySelector('.nav-tab[data-tab="hr-salary"]');
+    if (hrSalaryTabBtn) {
+        hrSalaryTabBtn.addEventListener('click', () => {
+            loadHrSalaryList();
+        });
+    }
+    
+    // Add listener for HR salary search input
+    const hrSalarySearch = document.getElementById('hr-salary-search');
+    if (hrSalarySearch) {
+        hrSalarySearch.addEventListener('input', () => {
+            loadHrSalaryList();
+        });
+    }
+});

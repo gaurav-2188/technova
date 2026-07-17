@@ -1836,3 +1836,71 @@ def write_log(agent: str, message: str):
         pass
 
 
+class BankDetails(BaseModel):
+    account_name: str
+    account_number: str
+    ifsc_code: str
+    bank_name: str
+
+@router.get("/api/teacher/{username}/bank")
+def get_bank_details(username: str) -> dict:
+    store = LocalStateStore()
+    state = store.load_state()
+    if not state or "teachers" not in state or username not in state["teachers"]:
+        raise HTTPException(status_code=404, detail="Teacher not found.")
+    
+    teacher_data = state["teachers"][username]
+    bank_details = teacher_data.get("bank_details", {})
+    return {"status": "success", "bank_details": bank_details}
+
+@router.post("/api/teacher/{username}/bank")
+def update_bank_details(username: str, data: BankDetails) -> dict:
+    store = LocalStateStore()
+    state = store.load_state()
+    if not state or "teachers" not in state or username not in state["teachers"]:
+        raise HTTPException(status_code=404, detail="Teacher not found.")
+    
+    state["teachers"][username]["bank_details"] = data.dict()
+    store.save_state(state)
+    return {"status": "success", "message": "Bank details updated"}
+
+@router.get("/api/teacher/{username}/salary")
+def get_salary_history(username: str) -> dict:
+    store = LocalStateStore()
+    state = store.load_state()
+    if not state or "teachers" not in state or username not in state["teachers"]:
+        raise HTTPException(status_code=404, detail="Teacher not found.")
+    
+    teacher_data = state["teachers"][username]
+    history = teacher_data.get("salary_history", [])
+    
+    return {"status": "success", "history": history}
+
+class SalaryPushReq(BaseModel):
+    username: str
+    amount: str
+    month: str
+
+@router.post("/api/hr/salary/push")
+def push_salary(data: SalaryPushReq) -> dict:
+    store = LocalStateStore()
+    state = store.load_state()
+    if not state or "teachers" not in state or data.username not in state["teachers"]:
+        raise HTTPException(status_code=404, detail="Teacher not found.")
+        
+    teacher_data = state["teachers"][data.username]
+    if "salary_history" not in teacher_data:
+        teacher_data["salary_history"] = []
+        
+    import secrets
+    record = {
+        "month": data.month,
+        "amount": data.amount,
+        "transaction_id": f"TXN-{secrets.token_hex(4).upper()}",
+        "status": "Credited"
+    }
+    
+    # Prepend to history
+    teacher_data["salary_history"].insert(0, record)
+    store.save_state(state)
+    return {"status": "success", "record": record}
