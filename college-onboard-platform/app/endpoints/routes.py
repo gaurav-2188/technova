@@ -403,6 +403,7 @@ def run_scheduler_agent_brief(state: dict, username: str) -> str:
     if upcoming_meetings:
         brief_parts.append("\n📅 Upcoming Meetings & Events:")
         brief_parts.extend(upcoming_meetings)
+        brief_parts.append("\nPlease check your calendar for details.")
     else:
         brief_parts.append("\n📅 No upcoming meetings or events scheduled.")
         

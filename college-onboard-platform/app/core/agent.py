@@ -573,6 +573,7 @@ async def scheduler_agent(ctx: Context, node_input: Any) -> Event:
     if upcoming_meetings:
         brief_parts.append("\n📅 Upcoming Meetings & Events:")
         brief_parts.extend(upcoming_meetings)
+        brief_parts.append("\nPlease check your calendar for details.")
     else:
         brief_parts.append("\n📅 No upcoming meetings or events scheduled.")
         

@@ -1092,7 +1092,12 @@ window.viewDoc = function(docName) {
 };
 
 window.deleteProject = async function(filename) {
-    if (!confirm("Are you sure you want to permanently delete this project/publication?")) {
+    const confirmed = await showCustomConfirm(
+        "Delete Project",
+        "Are you sure you want to permanently delete this project/publication?",
+        "🗑️"
+    );
+    if (!confirmed) {
         return;
     }
 
@@ -1174,7 +1179,12 @@ window.completeOnboarding = async function(username) {
 };
 
 window.removeProfilePhoto = async function(username) {
-    if (!confirm("Are you sure you want to permanently remove this teacher's profile photo?")) {
+    const confirmed = await showCustomConfirm(
+        "Remove Profile Photo",
+        "Are you sure you want to permanently remove this teacher's profile photo?",
+        "👤"
+    );
+    if (!confirmed) {
         return;
     }
 
@@ -1318,7 +1328,12 @@ document.getElementById('admin-edit-announcement-form').addEventListener('submit
 });
 
 window.deleteAnnouncement = async function(id) {
-    if (!confirm("Are you sure you want to delete this announcement?")) return;
+    const confirmed = await showCustomConfirm(
+        "Delete Announcement",
+        "Are you sure you want to delete this announcement?",
+        "📢"
+    );
+    if (!confirmed) return;
     
     const originalAnnouncements = [...systemState.announcements];
     systemState.announcements = systemState.announcements.filter(ann => ann.id !== id);
@@ -1454,7 +1469,12 @@ deleteTeacherBtn.addEventListener('click', async (e) => {
     const username = document.getElementById('edit-username').value;
     if (!username) return;
 
-    if (confirm(`Are you sure you want to permanently delete the profile for @${username}?`)) {
+    const confirmed = await showCustomConfirm(
+        "Delete Profile",
+        `Are you sure you want to permanently delete the profile for @${username}?`,
+        "🗑️"
+    );
+    if (confirmed) {
         const originalTeachers = { ...systemState.teachers };
 
         // Optimistic Update
