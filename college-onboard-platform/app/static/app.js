@@ -3268,16 +3268,124 @@ function openAdminTimetableModal(clickedDayName = 'Monday') {
     const modal = document.getElementById('admin-timetable-modal');
     if (!modal) return;
 
-    // Reset checkboxes and check the clicked day
-    const checkboxes = document.querySelectorAll('input[name="timetable-days"]');
-    checkboxes.forEach(cb => {
-        cb.checked = (cb.value === clickedDayName);
-    });
+    // Set the hidden selected day
+    const dayInput = document.getElementById('timetable-selected-day');
+    if (dayInput) {
+        dayInput.value = clickedDayName;
+    }
+
+    // Populate searchable teacher dropdown
+    populateTimetableTeacherDropdown();
 
     // Populate current timetable sessions list
     renderAdminTimetableSessionsList();
 
     modal.classList.remove('hidden');
+}
+
+function populateTimetableTeacherDropdown() {
+    const searchInput = document.getElementById('timetable-teacher-search-input');
+    const dropdownList = document.getElementById('timetable-teacher-dropdown-list');
+    const hiddenSelect = document.getElementById('timetable-teacher-select');
+    if (!searchInput || !dropdownList || !hiddenSelect || !systemState || !systemState.teachers) return;
+
+    const teachers = Object.keys(systemState.teachers).map(uname => {
+        return { username: uname, ...systemState.teachers[uname] };
+    });
+
+    const renderList = (filterText = '') => {
+        dropdownList.innerHTML = '';
+        const filtered = teachers.filter(t => {
+            const name = (t.name || '').toLowerCase();
+            const empId = (t.employee_id || '').toLowerCase();
+            const search = filterText.toLowerCase();
+            return name.includes(search) || empId.includes(search);
+        });
+
+        if (filtered.length === 0) {
+            dropdownList.innerHTML = '<div style="padding: 10px; color: #888; font-size: 0.85rem;">No teachers found</div>';
+            return;
+        }
+
+        filtered.forEach(t => {
+            const item = document.createElement('div');
+            item.style.padding = '10px 14px';
+            item.style.cursor = 'pointer';
+            item.style.display = 'flex';
+            item.style.justifyContent = 'space-between';
+            item.style.alignItems = 'center';
+            item.style.fontSize = '0.9rem';
+            item.style.borderBottom = '1px solid rgba(255, 255, 255, 0.02)';
+            item.className = 'teacher-dropdown-item';
+
+            item.innerHTML = `
+                <span style="font-weight: 500; color: #fff;">${t.name || t.username}</span>
+                <span style="font-size: 0.75rem; color: var(--text-muted);">${t.employee_id || 'No ID'}</span>
+            `;
+
+            item.addEventListener('click', () => {
+                searchInput.value = t.name || t.username;
+                hiddenSelect.value = t.username;
+                dropdownList.style.display = 'none';
+                onTimetableTeacherSelected(t.username);
+            });
+
+            // Hover effect styling
+            item.addEventListener('mouseenter', () => {
+                item.style.background = 'rgba(255, 255, 255, 0.05)';
+            });
+            item.addEventListener('mouseleave', () => {
+                item.style.background = 'transparent';
+            });
+
+            dropdownList.appendChild(item);
+        });
+    };
+
+    if (!searchInput.dataset.hasListener) {
+        searchInput.dataset.hasListener = "true";
+        searchInput.addEventListener('focus', () => {
+            dropdownList.style.display = 'block';
+            renderList(searchInput.value);
+        });
+
+        searchInput.addEventListener('input', () => {
+            dropdownList.style.display = 'block';
+            renderList(searchInput.value);
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!searchInput.contains(e.target) && !dropdownList.contains(e.target)) {
+                dropdownList.style.display = 'none';
+            }
+        });
+    }
+
+    // Set default value if empty
+    if (!hiddenSelect.value && teachers.length > 0) {
+        const defaultTeacher = teachers[0];
+        searchInput.value = defaultTeacher.name || defaultTeacher.username;
+        hiddenSelect.value = defaultTeacher.username;
+        onTimetableTeacherSelected(defaultTeacher.username);
+    }
+}
+
+function onTimetableTeacherSelected(username) {
+    if (!systemState || !systemState.teachers || !systemState.teachers[username]) return;
+    
+    const teacher = systemState.teachers[username];
+    teacherSchedule = teacher.schedule || [];
+    
+    // Update the Current Timetable list below
+    renderAdminTimetableSessionsList();
+}
+
+function formatTimeInputToAmPm(timeStr) {
+    if (!timeStr) return '';
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const formattedHours = hours % 12 || 12;
+    return `${String(formattedHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`;
 }
 
 function renderAdminTimetableSessionsList() {
@@ -3295,7 +3403,7 @@ function renderAdminTimetableSessionsList() {
         item.className = 'flex justify-between items-center bg-neutral-800/50 p-2 rounded border border-neutral-700/50 text-xs';
         item.innerHTML = `
             <div>
-                <strong class="text-purple-400">${s.subject}</strong> (${s.class})
+                <strong class="text-purple-400">${s.subject || 'Lecture'}</strong> (${s.class})
                 <div class="text-[10px] text-neutral-400">${s.day} | ${s.time}</div>
             </div>
             <button class="btn-delete-session text-red-400 hover:text-red-300 font-bold" style="background:none; border:none; cursor:pointer;" onclick="deleteTimetableSession(${idx})">Delete</button>
@@ -3322,16 +3430,21 @@ window.deleteTimetableSession = deleteTimetableSession;
 
 async function saveTeacherSchedule() {
     try {
+        const selectedTeacher = document.getElementById('timetable-teacher-select').value || 'teacher';
         const res = await fetch('/api/teacher/schedule', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                teacher_username: 'teacher',
+                teacher_username: selectedTeacher,
                 schedule: teacherSchedule
             })
         });
         if (!res.ok) {
             alert('Failed to save teacher schedule to backend.');
+        } else {
+            if (systemState && systemState.teachers && systemState.teachers[selectedTeacher]) {
+                systemState.teachers[selectedTeacher].schedule = [...teacherSchedule];
+            }
         }
     } catch (e) {
         console.error('Error saving teacher schedule:', e);
@@ -3343,48 +3456,55 @@ function setupAdminTimetableFormListener() {
     const form = document.getElementById('admin-timetable-form');
     if (!form) return;
 
+    const startTimeInput = document.getElementById('timetable-start-time');
+    const endTimeInput = document.getElementById('timetable-end-time');
+    if (startTimeInput && endTimeInput && !startTimeInput.dataset.hasListener) {
+        startTimeInput.dataset.hasListener = "true";
+        startTimeInput.addEventListener('change', () => {
+            const val = startTimeInput.value;
+            if (!val) return;
+            const [hours, minutes] = val.split(':').map(Number);
+            let endHours = hours + 1;
+            if (endHours >= 24) endHours -= 24;
+            const endVal = `${String(endHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+            endTimeInput.value = endVal;
+        });
+    }
+
     if (!form.dataset.hasListener) {
         form.dataset.hasListener = "true";
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            const subject = document.getElementById('timetable-subject').value.trim();
-            const time = document.getElementById('timetable-time').value.trim();
-            const classroom = document.getElementById('timetable-classroom').value.trim();
+            const startTime = document.getElementById('timetable-start-time').value;
+            const endTime = document.getElementById('timetable-end-time').value;
+            const classroom = document.getElementById('timetable-classroom').value;
+            const day = document.getElementById('timetable-selected-day').value || 'Monday';
 
-            const checkedDays = [];
-            const checkboxes = document.querySelectorAll('input[name="timetable-days"]:checked');
-            checkboxes.forEach(cb => checkedDays.push(cb.value));
-
-            if (checkedDays.length === 0) {
-                alert('Please select at least one active day of the week.');
+            if (!startTime || !endTime) {
+                alert('Please select start and end times.');
                 return;
             }
 
-            // Create new schedule items for each selected day
-            checkedDays.forEach(day => {
-                teacherSchedule.push({
-                    day: day,
-                    time: time,
-                    class: classroom,
-                    subject: subject
-                });
+            const formattedTime = `${formatTimeInputToAmPm(startTime)} - ${formatTimeInputToAmPm(endTime)}`;
+
+            teacherSchedule.push({
+                day: day,
+                time: formattedTime,
+                class: classroom,
+                subject: 'Lecture'
             });
 
-            // Save to database
             await saveTeacherSchedule();
 
-            // Clear inputs
-            document.getElementById('timetable-subject').value = '';
-            document.getElementById('timetable-time').value = '';
-            document.getElementById('timetable-classroom').value = '';
+            document.getElementById('timetable-start-time').value = '';
+            document.getElementById('timetable-end-time').value = '';
 
-            // Update UI
             renderAdminTimetableSessionsList();
             renderAdminCalendar();
             renderCalendar();
 
-            alert('Timetable sessions saved successfully!');
+            alert('Timetable session saved successfully!');
         });
     }
 }

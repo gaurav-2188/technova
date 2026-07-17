@@ -916,34 +916,34 @@
                 <button id="close-timetable-modal-btn" style="background: none; border: none; color: var(--text-muted); font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
             </div>
             <form id="admin-timetable-form">
-                <div class="form-group" style="margin-bottom: 1rem;">
+                <input type="hidden" id="timetable-selected-day" value="">
+                <div class="form-group" style="margin-bottom: 1rem; position: relative;">
                     <label style="display: block; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; color: var(--text-muted);">Teacher / User</label>
-                    <select id="timetable-teacher-select" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 10px 14px; border-radius: 8px; font-family: var(--font-main);">
-                        <option value="teacher">Dr. Jane Doe (teacher)</option>
-                    </select>
+                    <input type="text" id="timetable-teacher-search-input" autocomplete="off" placeholder="Search by name or employee ID..." style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 10px 14px; border-radius: 8px; font-family: var(--font-main);">
+                    <div id="timetable-teacher-dropdown-list" style="position: absolute; left: 0; right: 0; top: 100%; background: #1e1e24; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 1010; display: none; margin-top: 4px;">
+                        <!-- Options populated via JS -->
+                    </div>
+                    <input type="hidden" id="timetable-teacher-select" value="">
                 </div>
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label style="display: block; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; color: var(--text-muted);">Subject Name</label>
-                    <input type="text" id="timetable-subject" required placeholder="e.g. Advanced Algorithms" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 10px 14px; border-radius: 8px; font-family: var(--font-main);">
-                </div>
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label style="display: block; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; color: var(--text-muted);">Time Slot</label>
-                    <input type="text" id="timetable-time" required placeholder="e.g. 09:00 AM - 10:30 AM" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 10px 14px; border-radius: 8px; font-family: var(--font-main);">
-                </div>
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label style="display: block; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; color: var(--text-muted);">Classroom</label>
-                    <input type="text" id="timetable-classroom" required placeholder="e.g. CSE-A" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 10px 14px; border-radius: 8px; font-family: var(--font-main);">
+                <div class="form-group" style="margin-bottom: 1rem; display: flex; gap: 15px;">
+                    <div style="flex: 1;">
+                        <label style="display: block; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; color: var(--text-muted);">Start Time</label>
+                        <input type="time" id="timetable-start-time" required style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 10px 14px; border-radius: 8px; font-family: var(--font-main);">
+                    </div>
+                    <div style="flex: 1;">
+                        <label style="display: block; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; color: var(--text-muted);">End Time</label>
+                        <input type="time" id="timetable-end-time" required style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 10px 14px; border-radius: 8px; font-family: var(--font-main);">
+                    </div>
                 </div>
                 <div class="form-group" style="margin-bottom: 1.5rem;">
-                    <label style="display: block; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; color: var(--text-muted);">Active Days of Week</label>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
-                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem;"><input type="checkbox" name="timetable-days" value="Monday"> Mon</label>
-                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem;"><input type="checkbox" name="timetable-days" value="Tuesday"> Tue</label>
-                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem;"><input type="checkbox" name="timetable-days" value="Wednesday"> Wed</label>
-                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem;"><input type="checkbox" name="timetable-days" value="Thursday"> Thu</label>
-                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem;"><input type="checkbox" name="timetable-days" value="Friday"> Fri</label>
-                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem;"><input type="checkbox" name="timetable-days" value="Saturday"> Sat</label>
-                    </div>
+                    <label style="display: block; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; color: var(--text-muted);">Classroom</label>
+                    <select id="timetable-classroom" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 10px 14px; border-radius: 8px; font-family: var(--font-main);">
+                        <option value="CSE-A">CSE-A</option>
+                        <option value="CSE-B">CSE-B</option>
+                        <option value="ECE-A">ECE-A</option>
+                        <option value="ME-A">ME-A</option>
+                        <option value="Civil-A">Civil-A</option>
+                    </select>
                 </div>
                 <div style="display: flex; gap: 10px;">
                     <button type="submit" class="btn btn-primary" style="flex: 1;">Save Timetable Session</button>
