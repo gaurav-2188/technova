@@ -1384,7 +1384,7 @@ def get_calendar_meetings() -> List[dict]:
         try:
             client = create_client(supabase_url, supabase_key)
             res = client.table("meetings").select("id, title, description, event_date, event_time, departments, department").execute()
-            if res.data:
+            if res.data is not None:
                 for m in res.data:
                     m["date"] = m.get("event_date")
                     m["time"] = m.get("event_time")
@@ -1581,7 +1581,7 @@ def get_calendar_timetable() -> List[dict]:
         try:
             client = create_client(supabase_url, supabase_key)
             res = client.table("timetable_classes").select("id, subject_name, time_slot, classroom, day_of_week").execute()
-            if res.data:
+            if res.data is not None:
                 for c in res.data:
                     c["subject"] = c.get("subject_name")
                     c["time"] = c.get("time_slot")
