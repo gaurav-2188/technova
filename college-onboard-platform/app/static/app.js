@@ -2535,7 +2535,7 @@ async function renderCalendar() {
     // Fill preceding empty cells
     for (let i = 0; i < firstDayIndex; i++) {
         const emptyCell = document.createElement('div');
-        emptyCell.className = 'calendar-day-cell other-month opacity-20 pointer-events-none w-full aspect-square border border-neutral-800 overflow-hidden';
+        emptyCell.className = 'calendar-day-cell other-month opacity-20 pointer-events-none w-full aspect-square h-full max-h-full border border-neutral-800 overflow-hidden';
         daysGrid.appendChild(emptyCell);
     }
 
@@ -2546,7 +2546,7 @@ async function renderCalendar() {
     // Render cells for days
     for (let day = 1; day <= totalDays; day++) {
         const cell = document.createElement('div');
-        cell.className = 'calendar-day-cell w-full aspect-square border border-neutral-800/60 rounded relative transition-all overflow-hidden';
+        cell.className = 'calendar-day-cell w-full aspect-square h-full max-h-full border border-neutral-800/60 rounded relative transition-all overflow-hidden';
 
         // Check if Sunday
         const dateObj = new Date(calendarYear, calendarMonth, day);
@@ -2662,7 +2662,7 @@ async function renderCalendar() {
         const dayHolidays = holidaysByDate[dateStr] || [];
         dayHolidays.forEach(h => {
             const badge = document.createElement('span');
-            badge.className = 'calendar-event-badge bg-red-600/20 text-red-400 px-1.5 py-0.5 rounded text-[10px] truncate whitespace-nowrap overflow-hidden max-w-full block border border-red-500/30';
+            badge.className = 'calendar-event-badge bg-red-600/20 text-red-400 px-1.5 py-0.5 rounded text-[10px] block w-full truncate whitespace-nowrap overflow-hidden border border-red-500/30';
             badge.innerText = `🌴 ${h.localName || h.name}`;
             badge.title = h.name;
             eventsContainer.appendChild(badge);
@@ -2673,7 +2673,7 @@ async function renderCalendar() {
             const dayAcademicEvents = meetingsByDate[dateStr] || [];
             dayAcademicEvents.forEach(e => {
                 const badge = document.createElement('span');
-                badge.className = 'calendar-event-badge bg-blue-800/30 text-blue-400 px-1.5 py-0.5 rounded text-[10px] truncate whitespace-nowrap overflow-hidden max-w-full block border border-blue-500/20';
+                badge.className = 'calendar-event-badge bg-blue-800/30 text-blue-400 px-1.5 py-0.5 rounded text-[10px] block w-full truncate whitespace-nowrap overflow-hidden border border-blue-500/20';
                 badge.innerText = `${e.type === 'meeting' ? '💼' : '🎓'} ${e.title}`;
                 badge.title = e.title;
                 eventsContainer.appendChild(badge);
@@ -2684,7 +2684,7 @@ async function renderCalendar() {
                 const dayClasses = classesByDay[weekdayName] || [];
                 dayClasses.forEach(c => {
                     const badge = document.createElement('span');
-                    badge.className = 'calendar-event-badge bg-purple-800/30 text-purple-400 px-1.5 py-0.5 rounded text-[10px] truncate whitespace-nowrap overflow-hidden max-w-full block border border-purple-500/20';
+                    badge.className = 'calendar-event-badge bg-purple-800/30 text-purple-400 px-1.5 py-0.5 rounded text-[10px] block w-full truncate whitespace-nowrap overflow-hidden border border-purple-500/20';
                     badge.innerText = `📖 ${c.subject} (${c.class})`;
                     badge.title = `${c.subject} (${c.class}) - ${c.time}`;
                     eventsContainer.appendChild(badge);
@@ -2915,7 +2915,7 @@ async function renderAdminCalendar() {
     // Fill preceding empty cells
     for (let i = 0; i < firstDayIndex; i++) {
         const emptyCell = document.createElement('div');
-        emptyCell.className = 'calendar-day-cell other-month opacity-20 pointer-events-none w-full aspect-square border border-neutral-800 overflow-hidden';
+        emptyCell.className = 'calendar-day-cell other-month opacity-20 pointer-events-none w-full aspect-square h-full max-h-full border border-neutral-800 overflow-hidden';
         daysGrid.appendChild(emptyCell);
     }
 
@@ -2926,7 +2926,7 @@ async function renderAdminCalendar() {
     // Render cells for days
     for (let day = 1; day <= totalDays; day++) {
         const cell = document.createElement('div');
-        cell.className = 'calendar-day-cell admin-day-cell w-full aspect-square border border-neutral-800/60 rounded relative transition-all overflow-hidden';
+        cell.className = 'calendar-day-cell admin-day-cell w-full aspect-square h-full max-h-full border border-neutral-800/60 rounded relative transition-all overflow-hidden';
 
         // Check if Sunday
         const dateObj = new Date(adminCalendarYear, adminCalendarMonth, day);
@@ -2977,7 +2977,7 @@ async function renderAdminCalendar() {
         const dayHolidays = holidaysByDate[dateStr] || [];
         dayHolidays.forEach(h => {
             const badge = document.createElement('span');
-            badge.className = 'calendar-event-badge bg-red-600/20 text-red-400 px-1.5 py-0.5 rounded text-[10px] truncate whitespace-nowrap overflow-hidden max-w-full block border border-red-500/30';
+            badge.className = 'calendar-event-badge bg-red-600/20 text-red-400 px-1.5 py-0.5 rounded text-[10px] block w-full truncate whitespace-nowrap overflow-hidden border border-red-500/30';
             badge.innerText = `🌴 ${h.localName || h.name}`;
             badge.title = h.name;
             eventsContainer.appendChild(badge);
@@ -2988,7 +2988,7 @@ async function renderAdminCalendar() {
             const dayAcademicEvents = meetingsByDate[dateStr] || [];
             dayAcademicEvents.forEach(e => {
                 const badge = document.createElement('span');
-                badge.className = 'calendar-event-badge admin-event-badge bg-blue-800/30 text-blue-400 px-1.5 py-0.5 rounded text-[10px] truncate whitespace-nowrap overflow-hidden max-w-full block border border-blue-500/20';
+                badge.className = 'calendar-event-badge admin-event-badge bg-blue-800/30 text-blue-400 px-1.5 py-0.5 rounded text-[10px] block w-full truncate whitespace-nowrap overflow-hidden border border-blue-500/20';
                 badge.innerText = `${e.type === 'meeting' ? '💼' : '🎓'} ${e.title}`;
                 badge.title = e.title;
                 
@@ -3005,7 +3005,7 @@ async function renderAdminCalendar() {
                 const dayClasses = classesByDay[weekdayName] || [];
                 dayClasses.forEach(c => {
                     const badge = document.createElement('span');
-                    badge.className = 'calendar-event-badge admin-event-badge bg-purple-800/30 text-purple-400 px-1.5 py-0.5 rounded text-[10px] truncate whitespace-nowrap overflow-hidden max-w-full block border border-purple-500/20';
+                    badge.className = 'calendar-event-badge admin-event-badge bg-purple-800/30 text-purple-400 px-1.5 py-0.5 rounded text-[10px] block w-full truncate whitespace-nowrap overflow-hidden border border-purple-500/20';
                     badge.innerText = `📖 ${c.subject} (${c.class})`;
                     badge.title = `${c.subject} (${c.class}) - ${c.time}`;
                     
