@@ -24,6 +24,7 @@ def clean_and_capitalize_name(name: str) -> str:
 
 class ChatRequest(BaseModel):
     message: str
+    username: Optional[str] = None
 
 class ActionRequest(BaseModel):
     action: str  # e.g., "approve_interview", "upload_documents", "schedule", "allotment", "provision"
@@ -366,12 +367,14 @@ def run_scheduler_agent_brief(state: dict, username: str) -> str:
                         ai_title = cached.get("ai_title", title)
                         ai_brief = cached.get("ai_brief", desc)
                         
+                    m_time = m.get("event_time") or m.get("time") or ""
+                    time_str = f" at {m_time}" if m_time else ""
                     if delta == 0:
-                        upcoming_meetings.append(f"• {ai_title} is today! (Brief Info: {ai_brief})")
+                        upcoming_meetings.append(f"• {ai_title} is today{time_str}! (Brief Info: {ai_brief})")
                     elif delta == 1:
-                        upcoming_meetings.append(f"• {ai_title} upcoming in 1 day (Brief Info: {ai_brief})")
+                        upcoming_meetings.append(f"• {ai_title} upcoming in 1 day{time_str} (Brief Info: {ai_brief})")
                     else:
-                        upcoming_meetings.append(f"• {ai_title} upcoming in {delta} days (Brief Info: {ai_brief})")
+                        upcoming_meetings.append(f"• {ai_title} upcoming in {delta} days{time_str} (Brief Info: {ai_brief})")
             except Exception:
                 pass
             
@@ -398,16 +401,33 @@ def run_scheduler_agent_brief(state: dict, username: str) -> str:
     # 2. Salary status check (mock status)
     salary_msg = "💰 Salary for the month has been credited."
     
-    # Construct brief
-    brief_parts = [salary_msg]
-    if upcoming_meetings:
-        brief_parts.append("\n📅 Upcoming Meetings & Events:")
-        brief_parts.extend(upcoming_meetings)
-        brief_parts.append("\nPlease check your calendar for details.")
-    else:
-        brief_parts.append("\n📅 No upcoming meetings or events scheduled.")
+    # 2. Extract teacher profile details for caching and custom briefing
+    teacher_name = ""
+    department = ""
+    designation = ""
+    t_data = {}
+    if state and "teachers" in state and username in state["teachers"]:
+        t_data = state["teachers"][username]
+        teacher_name = t_data.get("name") or username or ""
+        department = t_data.get("department") or ""
+        designation = t_data.get("designation") or ""
+
+    # 3. Salary status check (mock status, 24-hour limit check)
+    from app.core.agent import get_salary_status_message
+    salary_msg = get_salary_status_message(t_data)
         
-    return "\n".join(brief_parts)
+    # 4. Generate dynamic briefing using AI
+    from app.core.agent import get_or_generate_companion_brief
+    pesu_companion_brief, was_new, updated_meta = get_or_generate_companion_brief(
+        teacher_data=t_data,
+        salary_msg=salary_msg,
+        upcoming_meetings=upcoming_meetings,
+        today_str=today_str
+    )
+    if was_new and t_data:
+        t_data.update(updated_meta)
+        
+    return pesu_companion_brief
 
 
 @router.get("/api/state")
@@ -633,6 +653,25 @@ async def chatbot_endpoint(req: ChatRequest):
             pinecone_service = PineconeRAGService()
             rules_context = pinecone_service.query_rules(refined_query)
             
+            # Load user specific context/leave data
+            user_leave_context = ""
+            if req.username:
+                try:
+                    from app.core.local_storage import LocalStateStore
+                    store = LocalStateStore()
+                    state = store.load_state()
+                    if state and "teachers" in state and req.username in state["teachers"]:
+                        t_data = state["teachers"][req.username]
+                        leave_bal = t_data.get("leave_balance", 30)
+                        user_leave_context = (
+                            f"\nCandidate/Teacher Profile Leave Data:\n"
+                            f"- User: {t_data.get('name', req.username)}\n"
+                            f"- Leave Balance: {leave_bal} days remaining\n"
+                            f"- Sick day and Casual day leaves are both deducted from this general leave balance. So the user has {leave_bal} sick/casual days left.\n"
+                        )
+                except Exception as e:
+                    print(f"[Chatbot State Warning] {e}")
+            
             # 3. Call Gemini model using API Key
             from dotenv import load_dotenv
             load_dotenv(override=True)
@@ -649,7 +688,7 @@ async def chatbot_endpoint(req: ChatRequest):
                 f"Your answer must be direct, concise, and specifically address only what the user is asking. Do not summarize or list unrelated parts. For specific questions (e.g., 'what is the casual leave entitlement?'), provide a direct, concise answer (e.g., 'The casual leave entitlement is 12 days per year') without unnecessary lists, headers, or details.\n"
                 f"When formatting larger or multi-part responses, make sure they are well-aligned and readable using proper spacing, newlines, bold text, or clean bullet points where appropriate.\n"
                 f"Make sure to use relevant emojis where appropriate to make it engaging and friendly.\n\n"
-                f"Context:\n{rules_context}\n\n"
+                f"Context:\n{rules_context}\n{user_leave_context}\n\n"
                 f"User Query: {clean_input}\n\n"
                 f"Response:"
             )
@@ -1948,12 +1987,14 @@ def push_salary(data: SalaryPushReq) -> dict:
     if "salary_history" not in teacher_data:
         teacher_data["salary_history"] = []
         
+    import datetime
     import secrets
     record = {
         "month": data.month,
         "amount": data.amount,
         "transaction_id": f"TXN-{secrets.token_hex(4).upper()}",
-        "status": "Credited"
+        "status": "Credited",
+        "credited_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
     
     # Prepend to history

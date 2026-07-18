@@ -420,6 +420,154 @@ def policy_rag_agent(ctx: Context, node_input: Any) -> Event:
     return Event(output=msg, state=state_updates)
 
 
+def get_salary_status_message(teacher_data: dict) -> str:
+    """Returns salary credited message only if it was credited within the last 24 hours."""
+    import datetime
+    history = teacher_data.get("salary_history", [])
+    if not history:
+        return ""
+    
+    latest_record = history[0]
+    if latest_record.get("status") != "Credited":
+        return ""
+        
+    credited_at_str = latest_record.get("credited_at")
+    if not credited_at_str:
+        return ""
+        
+    try:
+        credited_at = datetime.datetime.fromisoformat(credited_at_str)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        if credited_at.tzinfo is None:
+            now = datetime.datetime.now()
+        
+        delta = now - credited_at
+        if delta.total_seconds() <= 24 * 3600:
+            return "💰 Salary for the month has been credited."
+    except Exception:
+        pass
+        
+    return ""
+
+
+def generate_dynamic_companion_brief(teacher_name: str, department: str, designation: str, salary_msg: str, upcoming_meetings: list) -> str:
+    """Generates a dynamic daily briefing message for a faculty member using Groq API."""
+    import os
+    import requests
+    
+    groq_key = os.getenv("GROQ_API_KEY", "").strip()
+    
+    # Construct a default fallback brief in markdown
+    fallback_parts = []
+    if salary_msg:
+        fallback_parts.append(f"💰 **Salary Status**: {salary_msg}")
+    
+    if upcoming_meetings:
+        fallback_parts.append("\n📅 **Upcoming Meetings & Events**:")
+        for m in upcoming_meetings:
+            fallback_parts.append(m)
+        fallback_parts.append("\n*Please check your calendar for details.*")
+    else:
+        fallback_parts.append("\n📅 *No upcoming meetings or events scheduled.*")
+        fallback_parts.append("\n💡 **Fun Fact**: Did you know that PES University was founded in 1972 and was originally known as the People's Education Society?")
+    
+    default_brief = "\n".join(fallback_parts)
+    
+    if not groq_key or groq_key == "your_groq_api_key_here":
+        return default_brief
+        
+    try:
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {groq_key}",
+            "Content-Type": "application/json"
+        }
+        
+        meetings_str = "\n".join(upcoming_meetings) if upcoming_meetings else "None"
+        prompt = f"""You are the PESU Companion daily brief generator for PES University's faculty onboarding portal.
+Generate a daily briefing message for a faculty member.
+
+Faculty Member Details:
+- Name: {teacher_name}
+- Department: {department}
+- Designation: {designation}
+
+Current Status:
+- Salary Status: {salary_msg}
+- Upcoming Meetings & Public Holidays:
+{meetings_str}
+
+Instructions:
+1. Format your response using clean Markdown. Use bold (**text**) and italics (*text*) to highlight key information or terms.
+2. If there are upcoming meetings/holidays, list them using bullet points (e.g. • or -) and write a short, welcoming summary.
+3. If there are NO upcoming meetings or public holidays, write a warm, encouraging check-in message and include an interesting, inspiring **Fun Fact** or **Productivity/Teaching Tip** to keep them motivated. There must always be one or the other content.
+4. Keep the entire briefing concise (under 80 words), professional, and warm.
+5. Do not include markdown headers (like # or ##). Avoid extra introductory or conversational text like "Here is your brief:". Start directly with the briefing content.
+"""
+
+        payload = {
+            "model": "llama-3.1-8b-instant",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "temperature": 0.7,
+            "max_tokens": 200
+        }
+        res = requests.post(url, headers=headers, json=payload, timeout=10)
+        if res.status_code == 200:
+            data = res.json()
+            brief = data["choices"][0]["message"]["content"].strip()
+            # Clean up any potential markdown headers
+            lines = brief.split('\n')
+            cleaned_lines = []
+            for line in lines:
+                if line.strip().startswith(('#', '##', '###', '####')):
+                    cleaned_lines.append(line.lstrip('#').strip())
+                else:
+                    cleaned_lines.append(line)
+            return "\n".join(cleaned_lines)
+    except Exception as e:
+        print(f"[Groq Daily Brief Generation Error] {e}")
+        
+    return default_brief
+
+
+def get_or_generate_companion_brief(teacher_data: dict, salary_msg: str, upcoming_meetings: list, today_str: str) -> tuple[str, bool, dict]:
+    """
+    Checks cache. Returns (brief, was_regenerated, updated_meta_to_save).
+    """
+    old_brief = teacher_data.get("pesu_companion_brief", "")
+    last_date = teacher_data.get("pesu_companion_last_generated_date", "")
+    last_inputs = teacher_data.get("pesu_companion_last_inputs", {})
+    
+    current_inputs = {
+        "salary_msg": salary_msg,
+        "upcoming_meetings": sorted(upcoming_meetings)
+    }
+    
+    if old_brief and last_date == today_str and last_inputs == current_inputs:
+        return old_brief, False, {}
+        
+    new_brief = generate_dynamic_companion_brief(
+        teacher_name=teacher_data.get("name") or "",
+        department=teacher_data.get("department") or "",
+        designation=teacher_data.get("designation") or "",
+        salary_msg=salary_msg,
+        upcoming_meetings=upcoming_meetings
+    )
+    
+    updated_meta = {
+        "pesu_companion_last_generated_date": today_str,
+        "pesu_companion_last_inputs": current_inputs
+    }
+    
+    return new_brief, True, updated_meta
+
+
+
 @node(rerun_on_resume=True)
 async def scheduler_agent(ctx: Context, node_input: Any) -> Event:
     """Checks upcoming meetings (within 3 days) and public holidays (only today), and salary status."""
@@ -536,12 +684,14 @@ async def scheduler_agent(ctx: Context, node_input: Any) -> Event:
                         ai_title = cached.get("ai_title", title)
                         ai_brief = cached.get("ai_brief", desc)
                         
+                    m_time = m.get("event_time") or m.get("time") or ""
+                    time_str = f" at {m_time}" if m_time else ""
                     if delta == 0:
-                        upcoming_meetings.append(f"• {ai_title} is today! (Brief Info: {ai_brief})")
+                        upcoming_meetings.append(f"• {ai_title} is today{time_str}! (Brief Info: {ai_brief})")
                     elif delta == 1:
-                        upcoming_meetings.append(f"• {ai_title} upcoming in 1 day (Brief Info: {ai_brief})")
+                        upcoming_meetings.append(f"• {ai_title} upcoming in 1 day{time_str} (Brief Info: {ai_brief})")
                     else:
-                        upcoming_meetings.append(f"• {ai_title} upcoming in {delta} days (Brief Info: {ai_brief})")
+                        upcoming_meetings.append(f"• {ai_title} upcoming in {delta} days{time_str} (Brief Info: {ai_brief})")
             except Exception:
                 pass
             
@@ -565,19 +715,35 @@ async def scheduler_agent(ctx: Context, node_input: Any) -> Event:
                     
             upcoming_meetings.append(f"• 📅 Holiday: {title} is today! (Brief Info: {brief_info})")
             
-    # 2. Salary status check (mock status)
-    salary_msg = "💰 Salary for the month has been credited."
-    
-    # Construct brief
-    brief_parts = [salary_msg]
-    if upcoming_meetings:
-        brief_parts.append("\n📅 Upcoming Meetings & Events:")
-        brief_parts.extend(upcoming_meetings)
-        brief_parts.append("\nPlease check your calendar for details.")
-    else:
-        brief_parts.append("\n📅 No upcoming meetings or events scheduled.")
-        
-    pesu_companion_brief = "\n".join(brief_parts)
+    # 2. Extract teacher profile details for caching and custom briefing
+    username = ctx.state.get("username")
+    teacher_name = ""
+    department = ""
+    designation = ""
+    t_data = {}
+    if current_state and "teachers" in current_state:
+        if username in current_state["teachers"]:
+            t_data = current_state["teachers"][username]
+        else:
+            email = ctx.state.get("email")
+            for t_username, td in current_state["teachers"].items():
+                if td.get("email") == email:
+                    t_data = td
+                    break
+        teacher_name = t_data.get("name") or username or ""
+        department = t_data.get("department") or ""
+        designation = t_data.get("designation") or ""
+
+    # 3. Salary status check (mock status, 24-hour limit check)
+    salary_msg = get_salary_status_message(t_data)
+
+    # 4. Generate dynamic briefing using AI
+    pesu_companion_brief, was_new, updated_meta = get_or_generate_companion_brief(
+        teacher_data=t_data,
+        salary_msg=salary_msg,
+        upcoming_meetings=upcoming_meetings,
+        today_str=today_str
+    )
     
     # Update state
     state_updates = {
@@ -586,6 +752,8 @@ async def scheduler_agent(ctx: Context, node_input: Any) -> Event:
         "current_stage": "provisioning_complete",
         "onboarding_status_message": "Onboarding Process Completed!"
     }
+    if was_new:
+        state_updates.update(updated_meta)
     
     # Update Context state so downstream workflow nodes have access
     for k, v in state_updates.items():

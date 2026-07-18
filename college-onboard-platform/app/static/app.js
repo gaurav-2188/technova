@@ -435,7 +435,7 @@ function updateDashboardView() {
                     statusSubtitle.innerText = "PESU Companion | Your Daily Brief";
                 }
                 const brief = teacher.pesu_companion_brief || '💰 Salary for the month has been credited.\n📅 No upcoming meetings or events scheduled.';
-                statusVal.innerHTML = brief.replace(/\n/g, '<br>');
+                statusVal.innerHTML = formatMarkdown(brief);
                 statusContainer.style.border = '1px solid rgba(88, 166, 255, 0.3)';
                 statusContainer.style.background = 'rgba(88, 166, 255, 0.02)';
             } else {
@@ -1934,7 +1934,7 @@ async function sendFullscreenChatMessage() {
         const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text })
+            body: JSON.stringify({ message: text, username: currentUser })
         });
 
         // Remove thinking bubble
@@ -2139,7 +2139,7 @@ async function sendHiddenPolicyQuery() {
         const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: 'load_basic_policies_rag' })
+            body: JSON.stringify({ message: 'load_basic_policies_rag', username: currentUser })
         });
 
         const tb = document.getElementById('thinking-bubble');
