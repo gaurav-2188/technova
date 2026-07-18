@@ -13,6 +13,7 @@ from app.core.local_storage import LocalStateStore
 from app.core.hitl import review_before_execute
 from app.core.privacy import DataMaskingMiddleware
 from app.tools.pinecone_rag import PineconeRAGService
+from app.app_utils.telemetry import track_memory
 
 # Set up environment variables for ADK's own agent registry / project discovery.
 # NOTE: We deliberately do NOT set GOOGLE_GENAI_USE_VERTEXAI here. Doing so used to
@@ -146,6 +147,7 @@ def router_node(ctx: Context, node_input: Any) -> Event:
     return Event(output=node_input, route="onboarding")
 
 
+@track_memory
 def chatbot_node(ctx: Context, node_input: Any) -> Event:
     """On-Demand parallel chatbot verifying leave database & policy rules."""
     # Central Data Masking Layer: Scrub PII from input before evaluating
@@ -389,6 +391,7 @@ async def onboarding_guide(ctx: Context, node_input: Any):
     yield Event(output=f"Onboarding Guide: Documents received: {docs}", state=state_updates)
 
 
+@track_memory
 def policy_rag_agent(ctx: Context, node_input: Any) -> Event:
     """Uses a simulated Llama 3.1 LLM response to check file formats and output college rules brief."""
     if isinstance(node_input, dict):

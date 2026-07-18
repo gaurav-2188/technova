@@ -49,3 +49,50 @@ def setup_telemetry() -> str | None:
         )
 
     return bucket
+
+
+import functools
+import tracemalloc
+
+def track_memory(func):
+    """Decorator to measure and log RAM overhead of a function using tracemalloc."""
+    @functools.wraps(func)
+    async def async_wrapper(*args, **kwargs):
+        if not tracemalloc.is_tracing():
+            tracemalloc.start()
+        
+        start_snapshot = tracemalloc.take_snapshot()
+        try:
+            return await func(*args, **kwargs)
+        finally:
+            end_snapshot = tracemalloc.take_snapshot()
+            stats = end_snapshot.compare_to(start_snapshot, 'lineno')
+            total_allocated = sum(stat.size for stat in stats)
+            logging.info(f"[MEMORY LOG] {func.__name__} - Total allocated memory: {total_allocated / 1024:.2f} KiB")
+            logging.info(f"[MEMORY LOG] {func.__name__} - Top memory allocations:")
+            for i, stat in enumerate(stats[:3]):
+                logging.info(f"   #{i+1}: {stat}")
+
+    @functools.wraps(func)
+    def sync_wrapper(*args, **kwargs):
+        if not tracemalloc.is_tracing():
+            tracemalloc.start()
+        
+        start_snapshot = tracemalloc.take_snapshot()
+        try:
+            return func(*args, **kwargs)
+        finally:
+            end_snapshot = tracemalloc.take_snapshot()
+            stats = end_snapshot.compare_to(start_snapshot, 'lineno')
+            total_allocated = sum(stat.size for stat in stats)
+            logging.info(f"[MEMORY LOG] {func.__name__} - Total allocated memory: {total_allocated / 1024:.2f} KiB")
+            logging.info(f"[MEMORY LOG] {func.__name__} - Top memory allocations:")
+            for i, stat in enumerate(stats[:3]):
+                logging.info(f"   #{i+1}: {stat}")
+
+    import asyncio
+    if asyncio.iscoroutinefunction(func):
+        return async_wrapper
+    else:
+        return sync_wrapper
+

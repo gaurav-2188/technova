@@ -103,7 +103,7 @@
                             <button class="nav-tab active" data-tab="hr-teachers-list">Manage Teachers</button>
                             <button class="nav-tab" data-tab="hr-verification" id="hr-verification-tab">Verification
                                 [0]</button>
-                            <button class="nav-tab" data-tab="hr-leave-applications" id="hr-leaves-tab">Leave Applications [0]</button>
+                            <button class="nav-tab" data-tab="hr-attendance-manager" id="hr-leaves-tab">Attendance Manager [0]</button>
                             <button class="nav-tab" data-tab="hr-add-teacher">Add New Teacher</button>
                         </div>
 
@@ -664,10 +664,47 @@
                         </div>
                     </div>
 
-                    <!-- HR Leave Applications View -->
-                    <div id="tab-hr-leave-applications" class="tab-pane hidden">
-                        <h2>Leave Applications</h2>
-                        <p class="section-desc">Review, accept, or reject leave requests submitted by teachers</p>
+                    <!-- HR Attendance Manager View -->
+                    <div id="tab-hr-attendance-manager" class="tab-pane hidden">
+                        <h2>Attendance Manager</h2>
+                        <p class="section-desc">Manage faculty working days and review, accept, or reject leave requests</p>
+                        
+                        <!-- Working Days Configuration Panel -->
+                        <div class="project-upload-section mt-3 mb-4" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px;">
+                            <h3 style="font-size: 1.1rem; margin-top: 0; margin-bottom: 15px; color: #58a6ff; display: flex; align-items: center; gap: 8px;">
+                                <span>📅</span> Modify Working Days
+                            </h3>
+                            <form id="hr-working-days-form" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+                                <div style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 200px;">
+                                    <label for="hr-wd-count-input" style="font-size: 0.85rem; color: #8b949e;">Working Days</label>
+                                    <input type="number" id="hr-wd-count-input" required min="1" max="31" placeholder="e.g. 13"
+                                        style="background: #0d1117; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; padding: 10px; color: #c9d1d9; font-size: 0.9rem; outline: none; box-sizing: border-box; width: 100%;">
+                                </div>
+                                <button type="submit" class="btn btn-primary" style="padding: 10px 24px; height: fit-content;">
+                                    Update Working Days
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Daily Attendance Logger Panel -->
+                        <div class="project-upload-section mt-3 mb-4" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px;">
+                            <h3 style="font-size: 1.1rem; margin-top: 0; margin-bottom: 15px; color: #58a6ff; display: flex; align-items: center; gap: 8px;">
+                                <span>📝</span> Mark Attendance
+                            </h3>
+                            <div style="display: flex; flex-direction: column; gap: 15px; width: 100%;">
+                                <div style="display: flex; flex-direction: column; gap: 6px; max-width: 250px;">
+                                    <label for="hr-global-log-date" style="font-size: 0.85rem; color: #8b949e; font-weight: 500;">Select Date</label>
+                                    <input type="date" id="hr-global-log-date" required
+                                        style="background: #0d1117; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; padding: 10px; color: #c9d1d9; font-size: 0.9rem; outline: none; box-sizing: border-box; width: 100%;">
+                                </div>
+                                <div id="hr-attendance-teachers-list" style="display: flex; flex-direction: column; gap: 12px; width: 100%; max-height: 400px; overflow-y: auto; padding-right: 5px; margin-top: 10px;">
+                                    <!-- Dynamic rows from app.js -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Leave Applications List -->
+                        <h3 style="font-size: 1.1rem; color: #c9d1d9; margin-top: 25px;">Leave Applications</h3>
                         <div id="hr-leave-applications-list" class="mt-3">
                             <!-- Dynamic Content -->
                         </div>
@@ -1055,7 +1092,7 @@
             </form>
             <div style="margin-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
                 <h4 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-muted);">Current Timetable</h4>
-                <div id="timetable-sessions-list" style="display: flex; flex-direction: column; gap: 6px; max-h: 150px; overflow-y: auto;">
+                <div id="timetable-sessions-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 150px; overflow-y: auto;">
                     <!-- Timetable items list dynamically populated -->
                 </div>
             </div>

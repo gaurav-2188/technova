@@ -9,6 +9,7 @@ import secrets
 import re
 from app.core.privacy import DataMaskingMiddleware
 from app.core.local_storage import LocalStateStore
+from app.app_utils.telemetry import track_memory
 
 
 router = APIRouter()
@@ -45,6 +46,7 @@ def webhook_upload(payload: dict) -> dict:
     }
 
 @router.post("/api/upload")
+@track_memory
 async def upload_document_endpoint(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -52,39 +54,60 @@ async def upload_document_endpoint(
     username: str = Form(...)
 ) -> dict:
     from supabase import create_client
+    import tempfile
+    import shutil
+    from app.app_utils.telemetry import track_memory
+
     supabase_url = os.getenv("SUPABASE_URL", "").strip()
     supabase_key = os.getenv("SUPABASE_KEY", "").strip()
     uploaded_to_supabase = False
     file_url = ""
-    if supabase_url and supabase_key:
+
+    # Create temporary file to stream file chunks and avoid memory accumulation
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        temp_file_path = tmp.name
         try:
-            client = create_client(supabase_url, supabase_key)
-            file_bytes = await file.read()
-            file_path = f"{username}/{doc_type}.pdf"
-            
-            res = client.storage.from_("documents").upload(
-                path=file_path,
-                file=file_bytes,
-                file_options={"cache-control": "3600", "upsert": "true", "content-type": "application/pdf"}
-            )
-            file_url = client.storage.from_("documents").get_public_url(file_path)
-            uploaded_to_supabase = True
+            while True:
+                chunk = await file.read(65536)
+                if not chunk:
+                    break
+                tmp.write(chunk)
         except Exception as e:
-            write_log("UPLOAD_WARNING", f"Supabase storage upload failed: {str(e)}. Falling back to local storage.")
+            tmp.close()
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+            raise e
+
+    try:
+        if supabase_url and supabase_key:
             try:
-                await file.seek(0)
+                client = create_client(supabase_url, supabase_key)
+                file_path = f"{username}/{doc_type}.pdf"
+                
+                with open(temp_file_path, "rb") as f_in:
+                    res = client.storage.from_("documents").upload(
+                        path=file_path,
+                        file=f_in,
+                        file_options={"cache-control": "3600", "upsert": "true", "content-type": "application/pdf"}
+                    )
+                file_url = client.storage.from_("documents").get_public_url(file_path)
+                uploaded_to_supabase = True
+            except Exception as e:
+                write_log("UPLOAD_WARNING", f"Supabase storage upload failed: {str(e)}. Falling back to local storage.")
+                
+        if not uploaded_to_supabase:
+            static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+            user_dir = os.path.join(static_dir, "uploads", username)
+            os.makedirs(user_dir, exist_ok=True)
+            file_path = os.path.join(user_dir, f"{doc_type}.pdf")
+            shutil.copy(temp_file_path, file_path)
+            file_url = f"/static/uploads/{username}/{doc_type}.pdf"
+    finally:
+        if os.path.exists(temp_file_path):
+            try:
+                os.remove(temp_file_path)
             except Exception:
                 pass
-            
-    if not uploaded_to_supabase:
-        static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
-        user_dir = os.path.join(static_dir, "uploads", username)
-        os.makedirs(user_dir, exist_ok=True)
-        file_path = os.path.join(user_dir, f"{doc_type}.pdf")
-        content = await file.read()
-        with open(file_path, "wb") as f:
-            f.write(content)
-        file_url = f"/static/uploads/{username}/{doc_type}.pdf"
 
     store = LocalStateStore()
     state = store.load_state()
@@ -114,12 +137,18 @@ async def upload_document_endpoint(
     return {"status": "success", "file_url": file_url}
 
 
+
 @router.post("/api/profile-photo/upload")
+@track_memory
 async def upload_profile_photo_endpoint(
     file: UploadFile = File(...),
     username: str = Form(...)
 ) -> dict:
     from supabase import create_client
+    import tempfile
+    import shutil
+    from app.app_utils.telemetry import track_memory
+
     supabase_url = os.getenv("SUPABASE_URL", "").strip()
     supabase_key = os.getenv("SUPABASE_KEY", "").strip()
     uploaded_to_supabase = False
@@ -129,40 +158,56 @@ async def upload_profile_photo_endpoint(
     if not ext:
         ext = ".jpg"
     
-    if supabase_url and supabase_key:
+    # Create temporary file to stream file chunks
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        temp_file_path = tmp.name
         try:
-            client = create_client(supabase_url, supabase_key)
-            file_bytes = await file.read()
-            file_path = f"{username}/profile_photo{ext}"
-            
-            import mimetypes
-            content_type, _ = mimetypes.guess_type(file.filename)
-            if not content_type:
-                content_type = "image/jpeg"
-                
-            res = client.storage.from_("documents").upload(
-                path=file_path,
-                file=file_bytes,
-                file_options={"cache-control": "3600", "upsert": "true", "content-type": content_type}
-            )
-            file_url = client.storage.from_("documents").get_public_url(file_path)
-            uploaded_to_supabase = True
+            while True:
+                chunk = await file.read(65536)
+                if not chunk:
+                    break
+                tmp.write(chunk)
         except Exception as e:
-            write_log("UPLOAD_WARNING", f"Supabase storage photo upload failed: {str(e)}. Falling back to local storage.")
+            tmp.close()
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+            raise e
+
+    try:
+        if supabase_url and supabase_key:
             try:
-                await file.seek(0)
+                client = create_client(supabase_url, supabase_key)
+                file_path = f"{username}/profile_photo{ext}"
+                
+                import mimetypes
+                content_type, _ = mimetypes.guess_type(file.filename)
+                if not content_type:
+                    content_type = "image/jpeg"
+                    
+                with open(temp_file_path, "rb") as f_in:
+                    res = client.storage.from_("documents").upload(
+                        path=file_path,
+                        file=f_in,
+                        file_options={"cache-control": "3600", "upsert": "true", "content-type": content_type}
+                    )
+                file_url = client.storage.from_("documents").get_public_url(file_path)
+                uploaded_to_supabase = True
+            except Exception as e:
+                write_log("UPLOAD_WARNING", f"Supabase storage photo upload failed: {str(e)}. Falling back to local storage.")
+                
+        if not uploaded_to_supabase:
+            static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+            user_dir = os.path.join(static_dir, "uploads", username)
+            os.makedirs(user_dir, exist_ok=True)
+            file_path = os.path.join(user_dir, f"profile_photo{ext}")
+            shutil.copy(temp_file_path, file_path)
+            file_url = f"/static/uploads/{username}/profile_photo{ext}"
+    finally:
+        if os.path.exists(temp_file_path):
+            try:
+                os.remove(temp_file_path)
             except Exception:
                 pass
-            
-    if not uploaded_to_supabase:
-        static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
-        user_dir = os.path.join(static_dir, "uploads", username)
-        os.makedirs(user_dir, exist_ok=True)
-        file_path = os.path.join(user_dir, f"profile_photo{ext}")
-        content = await file.read()
-        with open(file_path, "wb") as f:
-            f.write(content)
-        file_url = f"/static/uploads/{username}/profile_photo{ext}"
 
     store = LocalStateStore()
     state = store.load_state()
@@ -177,54 +222,77 @@ async def upload_profile_photo_endpoint(
 
 
 @router.post("/api/projects/upload")
+@track_memory
 async def upload_project_endpoint(
     file: UploadFile = File(...),
     title: str = Form(...),
     username: str = Form(...)
 ) -> dict:
     from supabase import create_client
+    import tempfile
+    import shutil
+    from app.app_utils.telemetry import track_memory
+
     supabase_url = os.getenv("SUPABASE_URL", "").strip()
     supabase_key = os.getenv("SUPABASE_KEY", "").strip()
     uploaded_to_supabase = False
     file_url = ""
-    if supabase_url and supabase_key:
+
+    # Create temporary file to stream file chunks
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        temp_file_path = tmp.name
         try:
-            client = create_client(supabase_url, supabase_key)
-            file_bytes = await file.read()
-            file_path = f"{username}/projects/{file.filename}"
-            
-            import mimetypes
-            content_type, _ = mimetypes.guess_type(file.filename)
-            if not content_type:
-                content_type = "application/octet-stream"
-            
-            res = client.storage.from_("documents").upload(
-                path=file_path,
-                file=file_bytes,
-                file_options={
-                    "cache-control": "3600", 
-                    "upsert": "true", 
-                    "content-type": content_type
-                }
-            )
-            file_url = client.storage.from_("documents").get_public_url(file_path)
-            uploaded_to_supabase = True
+            while True:
+                chunk = await file.read(65536)
+                if not chunk:
+                    break
+                tmp.write(chunk)
         except Exception as e:
-            write_log("UPLOAD_WARNING", f"Supabase storage project upload failed: {str(e)}. Falling back to local storage.")
+            tmp.close()
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+            raise e
+
+    try:
+        if supabase_url and supabase_key:
             try:
-                await file.seek(0)
+                client = create_client(supabase_url, supabase_key)
+                file_path = f"{username}/projects/{file.filename}"
+                
+                import mimetypes
+                content_type, _ = mimetypes.guess_type(file.filename)
+                if not content_type:
+                    content_type = "application/octet-stream"
+                
+                with open(temp_file_path, "rb") as f_in:
+                    res = client.storage.from_("documents").upload(
+                        path=file_path,
+                        file=f_in,
+                        file_options={
+                            "cache-control": "3600", 
+                            "upsert": "true", 
+                            "content-type": content_type
+                        }
+                    )
+                file_url = client.storage.from_("documents").get_public_url(file_path)
+                uploaded_to_supabase = True
+            except Exception as e:
+                write_log("UPLOAD_WARNING", f"Supabase storage project upload failed: {str(e)}. Falling back to local storage.")
+                
+        if not uploaded_to_supabase:
+            static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+            user_dir = os.path.join(static_dir, "uploads", username, "projects")
+            os.makedirs(user_dir, exist_ok=True)
+            file_path = os.path.join(user_dir, file.filename)
+            shutil.copy(temp_file_path, file_path)
+            file_url = f"/static/uploads/{username}/projects/{file.filename}"
+    finally:
+        if os.path.exists(temp_file_path):
+            try:
+                os.remove(temp_file_path)
             except Exception:
                 pass
-            
-    if not uploaded_to_supabase:
-        static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
-        user_dir = os.path.join(static_dir, "uploads", username, "projects")
-        os.makedirs(user_dir, exist_ok=True)
-        file_path = os.path.join(user_dir, file.filename)
-        content = await file.read()
-        with open(file_path, "wb") as f:
-            f.write(content)
-        file_url = f"/static/uploads/{username}/projects/{file.filename}"
+
 
     store = LocalStateStore()
     state = store.load_state()
@@ -297,7 +365,7 @@ def run_scheduler_agent_brief(state: dict, username: str) -> str:
         state["holiday_briefs_cache"] = {}
         
     # Helper to calculate delta and format message for meetings (3 days prior)
-    def get_meeting_message(title: str, date_str: str, description: str = "") -> str or None:
+    def get_meeting_message(title: str, date_str: str, description: str = "") -> Optional[str]:
         try:
             event_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
             delta = (event_date - today).days
@@ -359,6 +427,7 @@ def run_scheduler_agent_brief(state: dict, username: str) -> str:
 
 
 @router.post("/api/leaves/apply")
+@track_memory
 async def apply_leave_endpoint(
     username: str = Form(...),
     leave_date: str = Form(...),
@@ -367,6 +436,10 @@ async def apply_leave_endpoint(
     description: str = Form(...),
     file: Optional[UploadFile] = File(None)
 ) -> dict:
+    from app.app_utils.telemetry import track_memory
+    import tempfile
+    import shutil
+
     store = LocalStateStore()
     state = store.load_state()
     if not state or "teachers" not in state or username not in state["teachers"]:
@@ -383,11 +456,32 @@ async def apply_leave_endpoint(
         user_dir = os.path.join(static_dir, "uploads", username, "leaves")
         os.makedirs(user_dir, exist_ok=True)
         file_path = os.path.join(user_dir, file.filename)
-        content = await file.read()
-        with open(file_path, "wb") as f:
-            f.write(content)
-        file_url = f"/static/uploads/{username}/leaves/{file.filename}"
-        filename = file.filename
+        
+        # Stream file in chunks using a temporary file
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            temp_file_path = tmp.name
+            try:
+                while True:
+                    chunk = await file.read(65536)
+                    if not chunk:
+                        break
+                    tmp.write(chunk)
+            except Exception as e:
+                tmp.close()
+                if os.path.exists(temp_file_path):
+                    os.remove(temp_file_path)
+                raise e
+
+        try:
+            shutil.copy(temp_file_path, file_path)
+            file_url = f"/static/uploads/{username}/leaves/{file.filename}"
+            filename = file.filename
+        finally:
+            if os.path.exists(temp_file_path):
+                try:
+                    os.remove(temp_file_path)
+                except Exception:
+                    pass
         
     import secrets
     leave_id = secrets.token_hex(4)
@@ -406,6 +500,7 @@ async def apply_leave_endpoint(
     store.save_state(state)
     write_log("CANDIDATE_PORTAL", f"Applied for leave: {leave_type} on {leave_date} for teacher {username} (ID: {leave_id})")
     return {"status": "success", "leave_id": leave_id}
+
 
 
 @router.get("/api/state")
@@ -582,6 +677,7 @@ def refine_query_with_gemini(user_input: str) -> str:
     return user_input
 
 @router.post("/api/chat")
+@track_memory
 async def chatbot_endpoint(req: ChatRequest):
     clean_input = DataMaskingMiddleware.redact_pii(req.message)
     write_log("CHATBOT_AGENT", f"Received message: '{clean_input}'")
@@ -1100,6 +1196,42 @@ def trigger_action(req: ActionRequest, background_tasks: BackgroundTasks) -> dic
         teacher = state["teachers"][username]
         teacher["email"] = new_email
         write_log("CANDIDATE_PORTAL", f"Email updated successfully for user: {username} to {new_email}")
+
+    elif action == "update_working_days":
+        total_working_days = payload.get("total_working_days")
+        state["global_working_days"] = int(total_working_days)
+        write_log("HR_PORTAL", f"Updated global working days to {total_working_days}")
+
+    elif action == "log_attendance":
+        username = payload.get("username")
+        date = payload.get("date")
+        status = payload.get("status")
+        reason = payload.get("reason") or "Marked Absent by HR"
+        
+        if username not in state["teachers"]:
+            raise HTTPException(status_code=404, detail="Teacher not found.")
+            
+        teacher = state["teachers"][username]
+        if "attendance" not in teacher:
+            teacher["attendance"] = []
+            
+        # Clean existing entries on this date to prevent duplicates/conflicts
+        teacher["attendance"] = [att for att in teacher["attendance"] if att.get("date") != date]
+        
+        if status == "Absent":
+            teacher["attendance"].append({
+                "date": date,
+                "status": "Absent",
+                "reason": reason
+            })
+            write_log("HR_PORTAL", f"Logged ABSENT for teacher {username} on {date} (Reason: {reason})")
+        else:
+            teacher["attendance"].append({
+                "date": date,
+                "status": "Present",
+                "reason": "Marked Present by HR"
+            })
+            write_log("HR_PORTAL", f"Logged PRESENT for teacher {username} on {date}")
 
     elif action == "apply_leave":
         username = payload.get("username")

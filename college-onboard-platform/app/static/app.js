@@ -485,10 +485,38 @@ function updateDashboardView() {
             return weekdays;
         }
 
-        const approvedLeavesCount = (teacher.applied_leaves || []).filter(lvl => lvl.status === 'approved').length;
-        const tDays = getWeekdaysInMonthUpToToday();
-        const aDays = approvedLeavesCount;
-        const pDays = Math.max(0, tDays - aDays);
+        const currentDate = new Date();
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.getMonth();
+        
+        const absentDates = new Set();
+        const presentDates = new Set();
+        if (teacher.attendance) {
+            teacher.attendance.forEach(att => {
+                const attDate = new Date(att.date);
+                if (attDate.getFullYear() === currentYear && attDate.getMonth() === currentMonth) {
+                    if (att.status === 'Absent') {
+                        absentDates.add(att.date);
+                    } else if (att.status === 'Present') {
+                        presentDates.add(att.date);
+                    }
+                }
+            });
+        }
+        if (teacher.applied_leaves) {
+            teacher.applied_leaves.forEach(lvl => {
+                if (lvl.status === 'approved') {
+                    const lvlDate = new Date(lvl.date);
+                    if (lvlDate.getFullYear() === currentYear && lvlDate.getMonth() === currentMonth) {
+                        absentDates.add(lvl.date);
+                    }
+                }
+            });
+        }
+
+        const tDays = systemState.global_working_days !== undefined ? systemState.global_working_days : getWeekdaysInMonthUpToToday();
+        const aDays = absentDates.size;
+        const pDays = presentDates.size;
         
         if (presentCount) presentCount.innerText = pDays;
         if (absentCount) absentCount.innerText = aDays;
@@ -932,6 +960,50 @@ function updateDashboardView() {
             }
         }
 
+        // Populate the teacher select list for marking attendance
+        const globalLogDateInput = document.getElementById('hr-global-log-date');
+        if (globalLogDateInput && !globalLogDateInput.value) {
+            const today = new Date();
+            const offset = today.getTimezoneOffset();
+            const localToday = new Date(today.getTime() - (offset*60*1000));
+            globalLogDateInput.value = localToday.toISOString().split('T')[0];
+        }
+        if (globalLogDateInput && !globalLogDateInput.dataset.listenerBound) {
+            globalLogDateInput.addEventListener('change', () => {
+                updateDashboardView();
+            });
+            globalLogDateInput.dataset.listenerBound = "true";
+        }
+
+        const hrAttendanceTeachersList = document.getElementById('hr-attendance-teachers-list');
+        if (hrAttendanceTeachersList) {
+            hrAttendanceTeachersList.innerHTML = '';
+            Object.keys(systemState.teachers).forEach(uname => {
+                const t = systemState.teachers[uname];
+                const selectedDate = globalLogDateInput ? globalLogDateInput.value : '';
+                const isAbsent = (t.attendance || []).some(att => att.date === selectedDate);
+                
+                const row = document.createElement('div');
+                row.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.015); border: 1px solid rgba(255,255,255,0.06); padding: 12px 18px; border-radius: 8px; flex-wrap: wrap; gap: 15px; width: 100%; box-sizing: border-box;";
+                row.innerHTML = `
+                    <div style="text-align: left;">
+                        <div style="font-weight: 600; color: #fff; display: flex; align-items: center; gap: 8px;">
+                            ${t.name}
+                            ${isAbsent ? '<span style="background: rgba(248,81,73,0.15); color: #ff7b72; font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; border: 1px solid rgba(248,81,73,0.2);">Absent</span>' : '<span style="background: rgba(46,160,67,0.15); color: #56d364; font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; border: 1px solid rgba(46,160,67,0.2);">Present</span>'}
+                        </div>
+                        <div style="font-size: 0.8rem; color: #8b949e;">${t.department} (@${t.username})</div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <input type="text" id="hr-reason-${t.username}" placeholder="Absent Reason (optional)"
+                               style="background: #0d1117; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 8px; color: #c9d1d9; font-size: 0.85rem; outline: none; width: 180px;">
+                        <button class="btn btn-success btn-sm" onclick="window.markTeacherAttendance('${t.username}', 'Present')" style="padding: 8px 16px;">Mark Present</button>
+                        <button class="btn btn-danger btn-sm" onclick="window.markTeacherAttendance('${t.username}', 'Absent')" style="padding: 8px 16px;">Mark Absent</button>
+                    </div>
+                `;
+                hrAttendanceTeachersList.appendChild(row);
+            });
+        }
+
         // Populate Leave Applications tab for HR
         const hrLeavesTab = document.getElementById('hr-leaves-tab');
         const hrLeaveApplicationsList = document.getElementById('hr-leave-applications-list');
@@ -975,7 +1047,7 @@ function updateDashboardView() {
         });
 
         if (hrLeavesTab) {
-            hrLeavesTab.innerHTML = `Leave Applications [${pendingLeavesCount}]`;
+            hrLeavesTab.innerHTML = `Attendance Manager [${pendingLeavesCount}]`;
         }
 
         if (hrLeaveApplicationsList) {
@@ -1132,6 +1204,108 @@ function updateDashboardView() {
         }
     }
 }
+
+// HR Working Days Form
+const hrWorkingDaysForm = document.getElementById('hr-working-days-form');
+if (hrWorkingDaysForm) {
+    hrWorkingDaysForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const countInput = document.getElementById('hr-wd-count-input');
+        
+        if (!countInput || !countInput.value) {
+            alert('Please specify the working days.');
+            return;
+        }
+        
+        const totalWorkingDaysValue = parseInt(countInput.value, 10);
+        
+        systemState.global_working_days = totalWorkingDaysValue;
+        updateDashboardView();
+        
+        try {
+            const res = await fetch('/api/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'update_working_days',
+                    payload: {
+                        total_working_days: totalWorkingDaysValue
+                    }
+                })
+            });
+            
+            if (res.ok) {
+                syncStateData();
+                alert(`Successfully updated global working days to ${totalWorkingDaysValue}!`);
+                countInput.value = '';
+            } else {
+                const err = await res.json();
+                alert(`Failed to update working days: ${err.detail || 'Unknown error'}`);
+            }
+        } catch (error) {
+            alert('Server communication error.');
+        }
+    });
+}
+
+// HR Log Attendance Global Helper
+window.markTeacherAttendance = async function(username, status) {
+    const dateInput = document.getElementById('hr-global-log-date');
+    if (!dateInput || !dateInput.value) {
+        alert('Please select a date first.');
+        return;
+    }
+    const dateVal = dateInput.value;
+    const reasonInput = document.getElementById(`hr-reason-${username}`);
+    const reasonVal = reasonInput ? reasonInput.value.trim() : '';
+    
+    // Optimistic update
+    const teacher = systemState.teachers[username];
+    if (teacher) {
+        if (!teacher.attendance) teacher.attendance = [];
+        teacher.attendance = teacher.attendance.filter(att => att.date !== dateVal);
+        if (status === 'Absent') {
+            teacher.attendance.push({
+                date: dateVal,
+                status: 'Absent',
+                reason: reasonVal || 'Marked Absent by HR'
+            });
+        } else {
+            teacher.attendance.push({
+                date: dateVal,
+                status: 'Present',
+                reason: 'Marked Present by HR'
+            });
+        }
+        updateDashboardView();
+    }
+    
+    try {
+        const res = await fetch('/api/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'log_attendance',
+                payload: {
+                    username: username,
+                    date: dateVal,
+                    status: status,
+                    reason: reasonVal
+                }
+            })
+        });
+        
+        if (res.ok) {
+            syncStateData();
+            if (reasonInput) reasonInput.value = '';
+        } else {
+            const err = await res.json();
+            alert(`Failed to log attendance: ${err.detail || 'Unknown error'}`);
+        }
+    } catch (error) {
+        alert('Server communication error.');
+    }
+};
 
 // HR Add Teacher Form
 const hrAddTeacherForm = document.getElementById('hr-add-teacher-form');

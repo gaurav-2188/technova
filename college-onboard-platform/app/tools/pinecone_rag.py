@@ -4,6 +4,7 @@ import requests
 from dotenv import load_dotenv
 from pinecone import Pinecone
 from app.core.privacy import DataMaskingMiddleware
+from app.app_utils.telemetry import track_memory
 
 # Matches below this cosine similarity score are treated as irrelevant and dropped,
 # instead of always stuffing the top_k results into the LLM prompt regardless of
@@ -17,6 +18,7 @@ class PineconeRAGService:
         self.env = os.getenv("PINECONE_ENV", "")
         self.gemini_key = os.getenv("GEMINI_API_KEY", "")
 
+    @track_memory
     def query_rules(self, document_content: str) -> str:
         # Mask PII input context before performing any LLM/vector storage lookup
         scrubbed = DataMaskingMiddleware.redact_pii(document_content)
