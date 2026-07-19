@@ -10,13 +10,45 @@ services:
         value: 8000
       - key: ENV
         value: production
+      # Supabase - required for persistent state storage
+      - key: SUPABASE_URL
+        sync: false # Set in dashboard
+      - key: SUPABASE_KEY
+        sync: false # Set in dashboard
+      # AI / LLM APIs
+      - key: GEMINI_API_KEY
+        sync: false # Set in dashboard
+      - key: GROQ_API_KEY
+        sync: false # Set in dashboard
+      # Pinecone
       - key: PINECONE_API_KEY
         sync: false # Set in dashboard
       - key: PINECONE_ENV
         sync: false # Set in dashboard
-      - key: HR_EMAIL
-        value: hr@pes.edu
+      # SMTP / Email
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USERNAME
+        sync: false # Set in dashboard
+      - key: SMTP_PASSWORD
+        sync: false # Set in dashboard
+      - key: SENDGRID_API_KEY
+        sync: false # Set in dashboard
       - key: SMTP_TOKEN
         sync: false # Set in dashboard
       - key: CALENDAR_TOKEN
         sync: false # Set in dashboard
+      # Notification contacts
+      - key: HR_EMAIL
+        sync: false # Set in dashboard
+      - key: CHAIRPERSON_EMAIL
+        sync: false # Set in dashboard
+      - key: IDCARD_EMAIL
+        sync: false # Set in dashboard
+      - key: IT_EMAIL
+        sync: false # Set in dashboard
+      # Feature flags
+      - key: BYPASS_HITL_FOR_TESTING
+        value: "true"
