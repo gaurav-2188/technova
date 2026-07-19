@@ -453,7 +453,7 @@ def get_salary_status_message(teacher_data: dict) -> str:
     return ""
 
 
-def generate_dynamic_companion_brief(teacher_name: str, department: str, designation: str, salary_msg: str, upcoming_meetings: list, seating_info: str = "") -> str:
+def generate_dynamic_companion_brief(teacher_name: str, department: str, designation: str, salary_msg: str, upcoming_meetings: list, seating_info: str = "", applied_leaves: list = None) -> str:
     """Generates a dynamic daily briefing message for a faculty member using Groq API."""
     import os
     import requests
@@ -467,6 +467,11 @@ def generate_dynamic_companion_brief(teacher_name: str, department: str, designa
     
     if seating_info:
         fallback_parts.append(f"🪑 **Seating Assigned**: {seating_info} — check the **Seating Info** tab to view your workspace details.")
+        
+    if applied_leaves:
+        fallback_parts.append("\n✉️ **Leave Requests Status**:")
+        for l in applied_leaves:
+            fallback_parts.append(f"- Leave on {l.get('date')}: status is **{l.get('status')}**")
     
     if upcoming_meetings:
         fallback_parts.append("\n📅 **Upcoming Meetings & Events**:")
@@ -493,6 +498,12 @@ def generate_dynamic_companion_brief(teacher_name: str, department: str, designa
         seating_note = f""
         if seating_info:
             seating_note = f"- Seating: {seating_info} (newly assigned — mention they should check the Seating Info tab)\n"
+            
+        leaves_str = "\n".join([
+            f"- Leave on {l.get('date')}: status is {l.get('status')}"
+            for l in applied_leaves
+        ]) if applied_leaves else "None"
+        
         prompt = f"""You are the PESU Companion daily brief generator for PES University's faculty onboarding portal.
 Generate a daily briefing message for a faculty member.
 
@@ -503,16 +514,19 @@ Faculty Member Details:
 {seating_note}
 Current Status:
 - Salary Status: {salary_msg}
+- Leave Requests Statuses:
+{leaves_str}
 - Upcoming Meetings & Public Holidays:
 {meetings_str}
 
 Instructions:
 1. Format your response using clean Markdown. Use bold (**text**) and italics (*text*) to highlight key information or terms.
 2. If seating has been assigned, mention it warmly and tell them to check the Seating Info tab.
-3. If there are upcoming meetings/holidays, list them using bullet points (• or -) with the exact date and time provided — do NOT paraphrase or invent dates.
-4. If there are NO upcoming meetings or public holidays, write a warm, encouraging check-in message and include an interesting, inspiring **Fun Fact** or **Productivity/Teaching Tip**.
-5. Keep the entire briefing concise (under 80 words), professional, and warm.
-6. Do not include markdown headers (like # or ##). Start directly with the briefing content.
+3. If there are recently submitted or updated leave requests (approved, rejected, or pending), briefly list or mention their status so the teacher is fully informed.
+4. If there are upcoming meetings/holidays, list them using bullet points (• or -) with the exact date and time provided — do NOT paraphrase or invent dates.
+5. If there are NO upcoming meetings or public holidays, write a warm, encouraging check-in message and include an interesting, inspiring **Fun Fact** or **Productivity/Teaching Tip**.
+6. Keep the entire briefing concise (under 80 words), professional, and warm.
+7. Do not include markdown headers (like # or ##). Start directly with the briefing content.
 """
 
         payload = {
@@ -545,7 +559,7 @@ Instructions:
     return default_brief
 
 
-def get_or_generate_companion_brief(teacher_data: dict, salary_msg: str, upcoming_meetings: list, today_str: str, seating_info: str = "") -> tuple[str, bool, dict]:
+def get_or_generate_companion_brief(teacher_data: dict, salary_msg: str, upcoming_meetings: list, today_str: str, seating_info: str = "", applied_leaves: list = None) -> tuple[str, bool, dict]:
     """
     Checks cache. Returns (brief, was_regenerated, updated_meta_to_save).
     """
@@ -553,10 +567,21 @@ def get_or_generate_companion_brief(teacher_data: dict, salary_msg: str, upcomin
     last_date = teacher_data.get("pesu_companion_last_generated_date", "")
     last_inputs = teacher_data.get("pesu_companion_last_inputs", {})
     
+    # Extract only serializable fields from applied leaves to prevent caching issues
+    leaves_serializable = []
+    if applied_leaves:
+        for l in applied_leaves:
+            leaves_serializable.append({
+                "date": l.get("date"),
+                "status": l.get("status"),
+                "type": l.get("type")
+            })
+            
     current_inputs = {
         "salary_msg": salary_msg,
         "upcoming_meetings": sorted(upcoming_meetings),
         "seating_info": seating_info,
+        "applied_leaves": leaves_serializable
     }
     
     if old_brief and last_date == today_str and last_inputs == current_inputs:
@@ -569,6 +594,7 @@ def get_or_generate_companion_brief(teacher_data: dict, salary_msg: str, upcomin
         salary_msg=salary_msg,
         upcoming_meetings=upcoming_meetings,
         seating_info=seating_info,
+        applied_leaves=leaves_serializable
     )
     
     updated_meta = {

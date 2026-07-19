@@ -754,12 +754,14 @@ def run_scheduler_agent_brief(state: dict, username: str) -> str:
         
     # 4. Generate dynamic briefing using AI
     from app.core.agent import get_or_generate_companion_brief
+    applied_leaves = t_data.get("applied_leaves", [])
     pesu_companion_brief, was_new, updated_meta = get_or_generate_companion_brief(
         teacher_data=t_data,
         salary_msg=salary_msg,
         upcoming_meetings=upcoming_meetings,
         today_str=today_str,
-        seating_info=seating_info
+        seating_info=seating_info,
+        applied_leaves=applied_leaves
     )
     if was_new and t_data:
         t_data.update(updated_meta)
@@ -933,6 +935,13 @@ async def get_state() -> dict:
                 if new_status != old_status:
                     teacher["document_statuses"][doc_type] = new_status
                     modified = True
+
+        # Check if all documents are approved and transition stage to policy_review
+        if teacher.get("document_statuses"):
+            all_approved = all(status == "approved" for status in teacher["document_statuses"].values())
+            if all_approved and teacher.get("current_stage") != "policy_review" and teacher.get("current_stage") != "provisioning_complete":
+                teacher["current_stage"] = "policy_review"
+                modified = True
 
     if modified:
         store.save_state(state)
@@ -1111,11 +1120,27 @@ async def chatbot_endpoint(req: ChatRequest):
                     if state and "teachers" in state and req.username in state["teachers"]:
                         t_data = state["teachers"][req.username]
                         leave_bal = t_data.get("leave_balance", 30)
+                        attendance_list = t_data.get("attendance", [])
+                        applied_leaves_list = t_data.get("applied_leaves", [])
+                        
+                        attendance_str = "\n".join([
+                            f"- {att.get('date')}: {att.get('status')} ({att.get('reason', 'N/A')})"
+                            for att in attendance_list
+                        ]) if attendance_list else "No attendance logged yet."
+
+                        applied_leaves_str = "\n".join([
+                            f"- {lvl.get('date')}: {lvl.get('type')} - Status: {lvl.get('status')} (Title: {lvl.get('title', 'N/A')})"
+                            for lvl in applied_leaves_list
+                        ]) if applied_leaves_list else "No leave applications yet."
+
                         user_leave_context = (
-                            f"\nCandidate/Teacher Profile Leave Data:\n"
+                            f"\nCandidate/Teacher Profile Leave & Attendance Data:\n"
                             f"- User: {t_data.get('name', req.username)}\n"
-                            f"- Leave Balance: {leave_bal} days remaining\n"
-                            f"- Sick day and Casual day leaves are both deducted from this general leave balance. So the user has {leave_bal} sick/casual days left.\n"
+                            f"- General Leave Balance: {leave_bal} days remaining (Sick and Casual day leaves are both deducted from this general leave balance)\n"
+                            f"- Present Days: {t_data.get('present_days', 0)}\n"
+                            f"- Loss of Pay Leaves: {t_data.get('loss_of_pay_leaves', 0)}\n"
+                            f"\nDetailed Attendance History:\n{attendance_str}\n"
+                            f"\nApplied Leave Applications & Statuses:\n{applied_leaves_str}\n"
                         )
                 except Exception as e:
                     print(f"[Chatbot State Warning] {e}")

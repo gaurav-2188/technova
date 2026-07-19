@@ -374,6 +374,9 @@ function updateDashboardView() {
         if (sidebarName) sidebarName.innerText = teacher.name;
 
         const currentStage = teacher.current_stage || 'document_collection';
+        if (currentStage === 'document_collection') {
+            localStorage.removeItem(`has_clicked_policy_alert_${currentUser}`);
+        }
         const hasClickedAlert = localStorage.getItem(`has_clicked_policy_alert_${currentUser}`) === 'true';
         if (currentStage === 'policy_review' && !hasClickedAlert) {
             if (chatbotTab) {
@@ -522,42 +525,38 @@ function updateDashboardView() {
         const currentYear = currentDate.getFullYear();
         const currentMonth = currentDate.getMonth();
         
-        let lopDays = teacher.loss_of_pay_leaves || 0;
-        let calculatedLopDays = 0;
-        if (teacher.attendance) {
-            teacher.attendance.forEach(att => {
-                const attDate = new Date(att.date);
-                if (attDate.getFullYear() === currentYear && attDate.getMonth() === currentMonth) {
-                    if (att.status === 'Absent' && (att.reason === 'Loss of Pay' || att.reason === 'loss of leave holiday')) {
-                        calculatedLopDays++;
-                    }
-                }
-            });
-        }
-        if (calculatedLopDays > lopDays) {
-            lopDays = calculatedLopDays;
-        }
-
+        let lopDays = 0;
         let regularLeaves = 0;
+        const absentRecordList = [];
+
         if (teacher.attendance) {
             teacher.attendance.forEach(att => {
-                const attDate = new Date(att.date);
-                if (attDate.getFullYear() === currentYear && attDate.getMonth() === currentMonth) {
-                    if (att.status === 'Absent' && att.reason && att.reason.includes('Regular Leave')) {
-                        regularLeaves++;
-                    }
-                }
-            });
-        }
-        if (teacher.applied_leaves) {
-            teacher.applied_leaves.forEach(lvl => {
-                if (lvl.status === 'approved') {
-                    const lvlDate = new Date(lvl.date);
-                    if (lvlDate.getFullYear() === currentYear && lvlDate.getMonth() === currentMonth) {
-                        const inAttendance = (teacher.attendance || []).some(att => att.date === lvl.date && att.status === 'Absent');
-                        if (!inAttendance) {
+                if (att.status === 'Absent') {
+                    const attDate = new Date(att.date);
+                    const isCurrentMonthObj = (attDate.getFullYear() === currentYear && attDate.getMonth() === currentMonth);
+
+                    // Find corresponding leave request
+                    const leaveReq = (teacher.applied_leaves || []).find(lvl => lvl.date === att.date);
+
+                    if (leaveReq && (leaveReq.status === 'approved' || leaveReq.status === 'accepted')) {
+                        // Paid leave: count towards regular leaves, do not add to absent table
+                        if (isCurrentMonthObj) {
                             regularLeaves++;
                         }
+                    } else {
+                        // Unpaid / LOP / Pending / Rejected: count towards LOP, show in absent table
+                        if (isCurrentMonthObj) {
+                            lopDays++;
+                        }
+
+                        absentRecordList.push({
+                            date: att.date,
+                            type: leaveReq ? leaveReq.type : 'Absent (No leave requested)',
+                            title: leaveReq ? (leaveReq.title || leaveReq.type) : 'Loss of Pay',
+                            description: leaveReq ? (leaveReq.description || '') : 'Absent without approved leave request.',
+                            document_url: leaveReq ? (leaveReq.document_url || '') : '',
+                            status: leaveReq ? leaveReq.status : 'Loss of Pay'
+                        });
                     }
                 }
             });
@@ -577,47 +576,19 @@ function updateDashboardView() {
         const attendanceBody = document.getElementById('attendance-record-body');
         attendanceBody.innerHTML = '';
         
-        const combinedList = [];
-        if (teacher.attendance) {
-            teacher.attendance.forEach(att => {
-                const isApplied = (teacher.applied_leaves || []).some(lvl => lvl.date === att.date);
-                if (!isApplied) {
-                    combinedList.push({
-                        date: att.date,
-                        type: att.reason,
-                        title: att.reason,
-                        description: 'Historical attendance log',
-                        document_url: '',
-                        status: 'approved'
-                    });
-                }
-            });
-        }
-        
-        if (teacher.applied_leaves) {
-            teacher.applied_leaves.forEach(lvl => {
-                combinedList.push({
-                    date: lvl.date,
-                    type: lvl.type,
-                    title: lvl.title || lvl.type,
-                    description: lvl.description || '',
-                    document_url: lvl.document_url || '',
-                    status: lvl.status
-                });
-            });
-        }
-        
-        combinedList.sort((a, b) => new Date(b.date) - new Date(a.date));
+        absentRecordList.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-        if (combinedList.length > 0) {
-            combinedList.forEach(item => {
+        if (absentRecordList.length > 0) {
+            absentRecordList.forEach(item => {
                 let statusBadge = '';
                 if (item.status === 'pending') {
                     statusBadge = '<span class="badge" style="background: #e3b341; color: #0d1117; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">Pending</span>';
                 } else if (item.status === 'approved' || item.status === 'accepted') {
                     statusBadge = '<span class="badge" style="background: #2ea043; color: #fff; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">Accepted</span>';
-                } else {
+                } else if (item.status === 'rejected') {
                     statusBadge = '<span class="badge" style="background: #f85149; color: #fff; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">Rejected</span>';
+                } else {
+                    statusBadge = '<span class="badge" style="background: #f85149; color: #fff; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">Loss of Pay</span>';
                 }
                 
                 let docHTML = '';
