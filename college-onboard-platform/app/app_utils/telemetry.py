@@ -56,6 +56,9 @@ import tracemalloc
 
 def track_memory(func):
     """Decorator to measure and log RAM overhead of a function using tracemalloc."""
+    if os.environ.get("ENABLE_MEMORY_TRACKING") != "true":
+        return func
+
     @functools.wraps(func)
     async def async_wrapper(*args, **kwargs):
         if not tracemalloc.is_tracing():

@@ -25,17 +25,25 @@ from app.app_utils.typing import Feedback
 from app.endpoints.routes import router
 
 setup_telemetry()
-otel_to_cloud = True
-try:
-    _, project_id = google.auth.default()
-except Exception:
-    project_id = "mock-project-id"
-    otel_to_cloud = False
+otel_to_cloud = False
+project_id = "mock-project-id"
 
-try:
-    logging_client = google_cloud_logging.Client()
-    logger = logging_client.logger(__name__)
-except Exception:
+if os.getenv("ENV") == "production":
+    try:
+        _, project_id = google.auth.default()
+        otel_to_cloud = True
+    except Exception:
+        pass
+
+logger = None
+if os.getenv("ENV") == "production":
+    try:
+        logging_client = google_cloud_logging.Client()
+        logger = logging_client.logger(__name__)
+    except Exception:
+        pass
+
+if logger is None:
     import logging
     logging.basicConfig(level=logging.INFO)
     class LocalLogger:

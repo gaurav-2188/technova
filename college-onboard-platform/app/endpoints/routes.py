@@ -131,11 +131,240 @@ async def upload_document_endpoint(
     else:
         ws.onboarding_status_message = "Please upload remaining documents in document upload tab"
 
+            
     state["teachers"][username].update(ws.model_dump())
     write_log("CANDIDATE_PORTAL", f"Uploaded document: {file.filename} -> {file_url} for teacher {username}")
     store.save_state(state)
     
     return {"status": "success", "file_url": file_url}
+
+
+def extract_text_from_pdf(file_bytes: bytes) -> str:
+    import io
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(file_bytes))
+        text = ""
+        for page in reader.pages:
+            t = page.extract_text()
+            if t:
+                text += t + "\n"
+        if text.strip():
+            return text.strip()
+    except Exception as e:
+        print(f"pypdf extraction failed: {e}")
+    try:
+        return file_bytes.decode("utf-8", errors="ignore").strip()
+    except Exception:
+        pass
+    return ""
+
+
+def run_groq_ocr(file_bytes: bytes, filename: str) -> list:
+    import os
+    import requests
+    import base64
+    import json
+    import re
+    
+    groq_key = os.getenv("GROQ_API_KEY", "").strip()
+    extracted_text = ""
+    if filename.lower().endswith(".pdf"):
+        extracted_text = extract_text_from_pdf(file_bytes)
+        
+    if not groq_key or groq_key == "your_groq_api_key_here":
+        # Local fallback parsing for testing
+        if extracted_text:
+            records = []
+            lines = extracted_text.split("\n")
+            for line in lines:
+                email_match = re.search(r'[\w\.-]+@[\w\.-]+', line)
+                if email_match:
+                    email = email_match.group(0)
+                    records.append({
+                        "teacher_name": line.split(email)[0].strip(", -"),
+                        "employee_id": "",
+                        "email_id": email
+                    })
+            if records:
+                return records
+        return []
+        
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {groq_key}",
+        "Content-Type": "application/json"
+    }
+
+    if extracted_text:
+        payload = {
+            "model": "llama-3.1-8b-instant",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": (
+                        "You are an OCR extraction assistant. Extract all teachers' attendance information from the following text.\n"
+                        "For each teacher, extract:\n"
+                        "1. Teacher Name\n"
+                        "2. Employee ID\n"
+                        "3. Email ID\n\n"
+                        "Format the output as a JSON object containing a \"records\" key which holds a list of objects with keys \"teacher_name\", \"employee_id\", and \"email_id\".\n"
+                        "Do not include any explanation or markdown formatting outside the JSON block.\n\n"
+                        f"Text:\n{extracted_text}"
+                    )
+                }
+            ],
+            "temperature": 0.1,
+            "response_format": {"type": "json_object"}
+        }
+    else:
+        base64_image = base64.b64encode(file_bytes).decode("utf-8")
+        mime_type = "image/jpeg"
+        if filename.lower().endswith(".png"):
+            mime_type = "image/png"
+        payload = {
+            "model": "llama-3.2-11b-vision-preview",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": (
+                                "Analyze this attendance sheet. Extract all records containing: Teacher Name, Employee ID, and Email ID. "
+                                "Return the output as a valid JSON object containing a 'records' key which holds a list of objects with keys 'teacher_name', 'employee_id', and 'email_id'."
+                            )
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime_type};base64,{base64_image}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            "temperature": 0.1,
+            "response_format": {"type": "json_object"}
+        }
+
+    try:
+        res = requests.post(url, headers=headers, json=payload, timeout=25)
+        if res.status_code == 200:
+            result_json = res.json()["choices"][0]["message"]["content"].strip()
+            data = json.loads(result_json)
+            return data.get("records", [])
+        else:
+            print(f"Groq API returned non-200: {res.status_code} - {res.text}")
+    except Exception as e:
+        print(f"Error calling Groq API: {e}")
+    return []
+
+
+def match_teacher(teacher: dict, record: dict) -> bool:
+    rec_email = str(record.get("email_id") or "").strip().lower()
+    t_email = str(teacher.get("email") or "").strip().lower()
+    if rec_email and t_email and rec_email == t_email:
+        return True
+    
+    rec_empid = str(record.get("employee_id") or "").strip().lower()
+    t_empid = str(teacher.get("employee_id") or "").strip().lower()
+    if rec_empid and t_empid and rec_empid == t_empid:
+        return True
+    
+    rec_name = str(record.get("teacher_name") or "").strip().lower()
+    t_name = str(teacher.get("name") or "").strip().lower()
+    if rec_name and t_name:
+        if rec_name in t_name or t_name in rec_name:
+            return True
+            
+    return False
+
+
+@router.post("/api/attendance/ocr-upload")
+async def ocr_attendance_upload(
+    file: UploadFile = File(...),
+    date: str = Form(...)
+) -> dict:
+    file_bytes = await file.read()
+    records = run_groq_ocr(file_bytes, file.filename)
+    
+    store = LocalStateStore()
+    state = store.load_state()
+    if not state or "teachers" not in state:
+        state = initialize_default_state()
+        
+    for username, teacher in state["teachers"].items():
+        if "loss_of_pay_leaves" not in teacher:
+            teacher["loss_of_pay_leaves"] = 0
+            
+        is_present = False
+        for rec in records:
+            if match_teacher(teacher, rec):
+                is_present = True
+                break
+                
+        if "attendance" not in teacher:
+            teacher["attendance"] = []
+            
+        existing_loss_of_pay = False
+        existing_present = False
+        new_attendance = []
+        for att in teacher["attendance"]:
+            if att.get("date") == date:
+                if att.get("status") == "Absent" and att.get("reason") == "Loss of Pay":
+                    existing_loss_of_pay = True
+                elif att.get("status") == "Present":
+                    existing_present = True
+            else:
+                new_attendance.append(att)
+        teacher["attendance"] = new_attendance
+        
+        if "present_days" not in teacher:
+            teacher["present_days"] = 0
+
+        if is_present:
+            teacher["attendance"].append({
+                "date": date,
+                "status": "Present",
+                "reason": "OCR Scanned Present"
+            })
+            if not existing_present:
+                teacher["present_days"] = teacher.get("present_days", 0) + 1
+            if existing_loss_of_pay:
+                teacher["loss_of_pay_leaves"] = max(0, teacher["loss_of_pay_leaves"] - 1)
+                
+            write_log("HR_PORTAL", f"OCR marked teacher {username} PRESENT on {date}")
+        else:
+            approved_leave = None
+            for lvl in teacher.get("applied_leaves", []):
+                if lvl.get("date") == date and lvl.get("status") == "approved":
+                    approved_leave = lvl
+                    break
+                    
+            if approved_leave:
+                teacher["attendance"].append({
+                    "date": date,
+                    "status": "Absent",
+                    "reason": f"Regular Leave ({approved_leave.get('type', 'Leave')})"
+                })
+                if existing_loss_of_pay:
+                    teacher["loss_of_pay_leaves"] = max(0, teacher["loss_of_pay_leaves"] - 1)
+                    
+                write_log("HR_PORTAL", f"OCR marked teacher {username} ABSENT (Regular Leave) on {date}")
+            else:
+                teacher["attendance"].append({
+                    "date": date,
+                    "status": "Absent",
+                    "reason": "Loss of Pay"
+                })
+                if not existing_loss_of_pay:
+                    teacher["loss_of_pay_leaves"] = teacher.get("loss_of_pay_leaves", 0) + 1
+                    
+                write_log("HR_PORTAL", f"OCR marked teacher {username} ABSENT (Loss of Pay) on {date}")
+                
+    store.save_state(state)
+    return {"status": "success", "extracted_records": records}
 
 
 
@@ -653,6 +882,19 @@ async def get_state() -> dict:
             teacher["onboarding_status_message"] = "Please upload documents in document upload tab"
             modified = True
 
+        if "present_days" not in teacher:
+            p_days = sum(1 for att in teacher.get("attendance", []) if att.get("status") == "Present")
+            if p_days == 0:
+                absents = sum(1 for att in teacher.get("attendance", []) if att.get("status") == "Absent")
+                teacher["present_days"] = max(0, 26 - absents)
+            else:
+                teacher["present_days"] = p_days
+            modified = True
+
+        if "loss_of_pay_leaves" not in teacher:
+            teacher["loss_of_pay_leaves"] = sum(1 for att in teacher.get("attendance", []) if att.get("status") == "Absent" and att.get("reason") == "Loss of Pay")
+            modified = True
+
         verified = teacher.get("verified_documents", [])
         for doc_type in ["aadhaar_card", "appointment_letter", "teacher_eligibility_test"]:
             path = teacher.get("document_paths", {}).get(doc_type, "")
@@ -703,6 +945,7 @@ def initialize_default_state() -> dict:
                 "username": "teacher",
                 "password": "password",
                 "seating_info": "Room 405, Desk C",
+                "present_days": 24,
                 "attendance": [
                     {"date": "2026-06-15", "status": "Absent", "reason": "Sick Leave"},
                     {"date": "2026-06-28", "status": "Absent", "reason": "Casual Leave"}
@@ -1271,6 +1514,7 @@ def trigger_action(req: ActionRequest, background_tasks: BackgroundTasks) -> dic
             "employee_id": payload.get("employee_id", ""),
             "created_at": payload.get("created_at") or int(time.time() * 1000),
             "seating_info": "Not Allotted",
+            "present_days": 24,
             "attendance": [
                 {"date": "2026-06-10", "status": "Absent", "reason": "Personal Leave"},
                 {"date": "2026-06-20", "status": "Absent", "reason": "Medical Leave"}
@@ -1328,6 +1572,7 @@ def trigger_action(req: ActionRequest, background_tasks: BackgroundTasks) -> dic
             teacher["attendance"] = []
             
         # Clean existing entries on this date to prevent duplicates/conflicts
+        existing_present = any(att.get("date") == date and att.get("status") == "Present" for att in teacher["attendance"])
         teacher["attendance"] = [att for att in teacher["attendance"] if att.get("date") != date]
         
         if status == "Absent":
@@ -1343,6 +1588,10 @@ def trigger_action(req: ActionRequest, background_tasks: BackgroundTasks) -> dic
                 "status": "Present",
                 "reason": "Marked Present by HR"
             })
+            if "present_days" not in teacher:
+                teacher["present_days"] = 0
+            if not existing_present:
+                teacher["present_days"] += 1
             write_log("HR_PORTAL", f"Logged PRESENT for teacher {username} on {date}")
 
     elif action == "apply_leave":

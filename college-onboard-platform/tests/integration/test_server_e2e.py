@@ -57,6 +57,9 @@ def start_server() -> subprocess.Popen[str]:
     ]
     env = os.environ.copy()
     env["INTEGRATION_TEST"] = "TRUE"
+    env["SUPABASE_URL"] = ""
+    env["SUPABASE_KEY"] = ""
+    env["PYTHONPATH"] = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     process = subprocess.Popen(
         command,
         stdout=subprocess.PIPE,
@@ -64,6 +67,7 @@ def start_server() -> subprocess.Popen[str]:
         text=True,
         bufsize=1,
         env=env,
+        cwd=os.path.dirname(os.path.abspath(__file__)),
     )
 
     # Start threads to log stdout and stderr in real-time
@@ -304,3 +308,98 @@ def test_profile_photo_upload_and_delete(server_fixture: subprocess.Popen[str]) 
     state_res2 = requests.get(BASE_URL + "/api/state")
     state2 = state_res2.json()
     assert state2["teachers"]["teacher"].get("profile_photo_url") == ""
+
+
+def test_ocr_attendance_flow(server_fixture: subprocess.Popen[str]) -> None:
+    # 1. Reset state to default first to ensure clean test environment
+    requests.post(BASE_URL + "/api/state/reset")
+    
+    # Verify default state
+    state_res = requests.get(BASE_URL + "/api/state")
+    assert state_res.status_code == 200
+    state = state_res.json()
+    assert "teacher" in state["teachers"]
+    
+    # 2. Test Rule 1: Present (teacher details found in document)
+    pdf_content = b"Teacher Name: Jane Doe\nEmail: jane.doe@pes.edu\nID: PESU-1234\n"
+    files = {"file": ("attendance.pdf", pdf_content, "application/pdf")}
+    data = {"date": "2026-07-10"}
+    
+    # Check initial present_days is 24
+    initial_state = requests.get(BASE_URL + "/api/state").json()
+    assert initial_state["teachers"]["teacher"].get("present_days") == 24
+
+    res = requests.post(BASE_URL + "/api/attendance/ocr-upload", files=files, data=data)
+    assert res.status_code == 200
+    res_json = res.json()
+    assert res_json["status"] == "success"
+    
+    # Verify in state
+    state = requests.get(BASE_URL + "/api/state").json()
+    teacher = state["teachers"]["teacher"]
+    attendance_dates = {att["date"]: att["status"] for att in teacher["attendance"]}
+    assert "2026-07-10" in attendance_dates
+    assert attendance_dates["2026-07-10"] == "Present"
+    # present_days should increment to 25
+    assert teacher.get("present_days") == 25
+    
+    # 3. Test Rule 3: Loss of Pay (teacher details NOT in document, and NO approved leave application)
+    pdf_content_absent = b"Teacher Name: Other Teacher\nEmail: other@pes.edu\nID: PESU-9999\n"
+    files_absent = {"file": ("attendance.pdf", pdf_content_absent, "application/pdf")}
+    data_absent = {"date": "2026-07-11"}
+    
+    res_absent = requests.post(BASE_URL + "/api/attendance/ocr-upload", files=files_absent, data=data_absent)
+    assert res_absent.status_code == 200
+    
+    # Verify in state
+    state = requests.get(BASE_URL + "/api/state").json()
+    teacher = state["teachers"]["teacher"]
+    attendance_dates = {att["date"]: (att["status"], att.get("reason")) for att in teacher["attendance"]}
+    assert "2026-07-11" in attendance_dates
+    assert attendance_dates["2026-07-11"][0] == "Absent"
+    assert attendance_dates["2026-07-11"][1] == "Loss of Pay"
+    assert teacher.get("loss_of_pay_leaves") == 1
+    # present_days should remain 25
+    assert teacher.get("present_days") == 25
+
+    # 4. Test Rule 2: Regular Absent (teacher details NOT in document, but HAS an approved leave application)
+    apply_data = {
+        "action": "apply_leave",
+        "payload": {
+            "username": "teacher",
+            "leave_date": "2026-07-12",
+            "leave_type": "Casual Leave"
+        }
+    }
+    apply_res = requests.post(BASE_URL + "/api/action", json=apply_data, headers=HEADERS)
+    assert apply_res.status_code == 200
+    
+    state = requests.get(BASE_URL + "/api/state").json()
+    teacher = state["teachers"]["teacher"]
+    applied_leaves = teacher.get("applied_leaves", [])
+    leave_id = [lvl["id"] for lvl in applied_leaves if lvl["date"] == "2026-07-12"][0]
+    
+    approve_data = {
+        "action": "approve_leave",
+        "payload": {
+            "username": "teacher",
+            "leave_id": leave_id
+        }
+    }
+    approve_res = requests.post(BASE_URL + "/api/action", json=approve_data, headers=HEADERS)
+    assert approve_res.status_code == 200
+    
+    files_rule2 = {"file": ("attendance.pdf", pdf_content_absent, "application/pdf")}
+    data_rule2 = {"date": "2026-07-12"}
+    res_rule2 = requests.post(BASE_URL + "/api/attendance/ocr-upload", files=files_rule2, data=data_rule2)
+    assert res_rule2.status_code == 200
+    
+    state = requests.get(BASE_URL + "/api/state").json()
+    teacher = state["teachers"]["teacher"]
+    attendance_dates = {att["date"]: (att["status"], att.get("reason")) for att in teacher["attendance"]}
+    assert "2026-07-12" in attendance_dates
+    assert attendance_dates["2026-07-12"][0] == "Absent"
+    assert "Regular Leave" in attendance_dates["2026-07-12"][1]
+    assert teacher.get("loss_of_pay_leaves") == 1
+    # present_days should remain 25
+    assert teacher.get("present_days") == 25

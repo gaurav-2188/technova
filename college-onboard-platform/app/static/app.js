@@ -490,16 +490,29 @@ function updateDashboardView() {
         const currentYear = currentDate.getFullYear();
         const currentMonth = currentDate.getMonth();
         
-        const absentDates = new Set();
-        const presentDates = new Set();
+        let lopDays = teacher.loss_of_pay_leaves || 0;
+        let calculatedLopDays = 0;
         if (teacher.attendance) {
             teacher.attendance.forEach(att => {
                 const attDate = new Date(att.date);
                 if (attDate.getFullYear() === currentYear && attDate.getMonth() === currentMonth) {
-                    if (att.status === 'Absent') {
-                        absentDates.add(att.date);
-                    } else if (att.status === 'Present') {
-                        presentDates.add(att.date);
+                    if (att.status === 'Absent' && (att.reason === 'Loss of Pay' || att.reason === 'loss of leave holiday')) {
+                        calculatedLopDays++;
+                    }
+                }
+            });
+        }
+        if (calculatedLopDays > lopDays) {
+            lopDays = calculatedLopDays;
+        }
+
+        let regularLeaves = 0;
+        if (teacher.attendance) {
+            teacher.attendance.forEach(att => {
+                const attDate = new Date(att.date);
+                if (attDate.getFullYear() === currentYear && attDate.getMonth() === currentMonth) {
+                    if (att.status === 'Absent' && att.reason && att.reason.includes('Regular Leave')) {
+                        regularLeaves++;
                     }
                 }
             });
@@ -509,19 +522,25 @@ function updateDashboardView() {
                 if (lvl.status === 'approved') {
                     const lvlDate = new Date(lvl.date);
                     if (lvlDate.getFullYear() === currentYear && lvlDate.getMonth() === currentMonth) {
-                        absentDates.add(lvl.date);
+                        const inAttendance = (teacher.attendance || []).some(att => att.date === lvl.date && att.status === 'Absent');
+                        if (!inAttendance) {
+                            regularLeaves++;
+                        }
                     }
                 }
             });
         }
 
         const tDays = systemState.global_working_days !== undefined ? systemState.global_working_days : 26;
-        const aDays = absentDates.size;
-        const pDays = presentDates.size;
+        const aDays = regularLeaves + lopDays;
+        const pDays = teacher.present_days !== undefined ? teacher.present_days : 24;
         
         if (presentCount) presentCount.innerText = pDays;
         if (absentCount) absentCount.innerText = aDays;
         if (totalWorkingDays) totalWorkingDays.innerText = tDays;
+        
+        const lossOfPayLeaves = document.getElementById('attendance-loss-of-pay-leaves');
+        if (lossOfPayLeaves) lossOfPayLeaves.innerText = lopDays;
 
         const attendanceBody = document.getElementById('attendance-record-body');
         attendanceBody.innerHTML = '';
@@ -4196,7 +4215,7 @@ async function loadHrSalaryList() {
             if (details.attendance) {
                 absentThisMonth = details.attendance.filter(a => a.date.startsWith(currentMonth)).length;
             }
-            const presentDays = Math.max(0, BASE_WORKING_DAYS - absentThisMonth);
+            const presentDays = details.present_days !== undefined ? details.present_days : 24;
             const netSalary = presentDays * PER_DAY_WAGE;
             
             const tr = document.createElement('tr');
@@ -4329,6 +4348,51 @@ document.addEventListener('DOMContentLoaded', () => {
     if (hrSalarySearch) {
         hrSalarySearch.addEventListener('input', () => {
             loadHrSalaryList();
+        });
+    }
+
+    // Add listener for HR OCR Upload Form
+    const hrOcrUploadForm = document.getElementById('hr-ocr-upload-form');
+    if (hrOcrUploadForm) {
+        hrOcrUploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const dateInput = document.getElementById('hr-ocr-date');
+            const fileInput = document.getElementById('hr-ocr-file');
+            const statusDiv = document.getElementById('hr-ocr-status');
+            
+            if (!dateInput.value || !fileInput.files[0]) {
+                alert('Please select a date and file.');
+                return;
+            }
+            
+            statusDiv.innerHTML = '<span style="color: #58a6ff;">Processing OCR... Please wait.</span>';
+            
+            const formData = new FormData();
+            formData.append('date', dateInput.value);
+            formData.append('file', fileInput.files[0]);
+            
+            try {
+                const response = await fetch('/api/attendance/ocr-upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                if (response.ok && result.status === 'success') {
+                    statusDiv.innerHTML = `<span style="color: #2ea043;">OCR Completed successfully! Extracted ${result.extracted_records.length} records.</span>`;
+                    fileInput.value = '';
+                    
+                    // Reload state to refresh teacher dashboard views and lists
+                    const stateRes = await fetch('/api/state');
+                    systemState = await stateRes.json();
+                    updateDashboardView();
+                } else {
+                    statusDiv.innerHTML = `<span style="color: #f85149;">Error: ${result.detail || 'Failed to process OCR'}</span>`;
+                }
+            } catch (err) {
+                console.error(err);
+                statusDiv.innerHTML = `<span style="color: #f85149;">Network error or server failed to respond.</span>`;
+            }
         });
     }
 });

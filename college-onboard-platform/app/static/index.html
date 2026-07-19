@@ -105,7 +105,6 @@
                             <button class="nav-tab" data-tab="hr-verification" id="hr-verification-tab">Verification
                                 [0]</button>
                             <button class="nav-tab" data-tab="hr-attendance-manager" id="hr-leaves-tab">Attendance Manager [0]</button>
-                            <button class="nav-tab" data-tab="hr-leave-applications" id="hr-leaves-tab">Leave Applications [0]</button>
                             <button class="nav-tab" data-tab="hr-salary">Salary Management</button>
                             <button class="nav-tab" data-tab="hr-add-teacher">Add New Teacher</button>
                         </div>
@@ -218,7 +217,7 @@
                     <div id="tab-candidate-attendance" class="tab-pane hidden">
                         <h2>My Attendance Summary</h2>
                         <p class="section-desc">Official absence logs</p>
-                        <div class="stats-cards-grid mt-3">
+                        <div class="stats-cards-grid mt-3" style="grid-template-columns: repeat(4, 1fr);">
                             <div class="stats-card">
                                 <h3>Number of Present Days</h3>
                                 <div class="stats-num" id="attendance-present-count">24</div>
@@ -226,6 +225,10 @@
                             <div class="stats-card alert-card">
                                 <h3>Number of Absent Days</h3>
                                 <div class="stats-num" id="attendance-absent-count">2</div>
+                            </div>
+                            <div class="stats-card alert-card">
+                                <h3>Loss of Pay Leaves</h3>
+                                <div class="stats-num" id="attendance-loss-of-pay-leaves">0</div>
                             </div>
                             <div class="stats-card">
                                 <h3>Total Working Days</h3>
@@ -757,25 +760,31 @@
                     <div id="tab-hr-attendance-manager" class="tab-pane hidden">
                         <h2>Attendance Manager</h2>
                         <p class="section-desc">Manage faculty working days and review, accept, or reject leave requests</p>
-                        
-
-
-                        <!-- Daily Attendance Logger Panel -->
+                                                <!-- OCR Attendance Upload Panel -->
                         <div class="project-upload-section mt-3 mb-4" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px;">
                             <h3 style="font-size: 1.1rem; margin-top: 0; margin-bottom: 15px; color: #58a6ff; display: flex; align-items: center; gap: 8px;">
-                                <span>📝</span> Mark Attendance
+                                <span>📄</span> Upload Attendance Sheet (OCR)
                             </h3>
-                            <div style="display: flex; flex-direction: column; gap: 15px; width: 100%;">
-                                <div style="display: flex; flex-direction: column; gap: 6px; max-width: 250px;">
-                                    <label for="hr-global-log-date" style="font-size: 0.85rem; color: #8b949e; font-weight: 500;">Select Date</label>
-                                    <input type="date" id="hr-global-log-date" required
-                                        style="background: #0d1117; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; padding: 10px; color: #c9d1d9; font-size: 0.9rem; outline: none; box-sizing: border-box; width: 100%;">
+                            <form id="hr-ocr-upload-form" style="display: flex; flex-direction: column; gap: 15px; width: 100%;">
+                                <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+                                    <div style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 200px;">
+                                        <label for="hr-ocr-date" style="font-size: 0.85rem; color: #8b949e; font-weight: 500;">Select Date</label>
+                                        <input type="date" id="hr-ocr-date" required
+                                            style="background: #0d1117; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; padding: 10px; color: #c9d1d9; font-size: 0.9rem; outline: none; box-sizing: border-box; width: 100%;">
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 6px; flex: 2; min-width: 250px;">
+                                        <label for="hr-ocr-file" style="font-size: 0.85rem; color: #8b949e; font-weight: 500;">Attendance Document (PDF or Image)</label>
+                                        <input type="file" id="hr-ocr-file" accept=".pdf,image/*" required
+                                            style="background: #0d1117; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; padding: 8px; color: #c9d1d9; font-size: 0.9rem; outline: none; box-sizing: border-box; width: 100%;">
+                                    </div>
+                                    <button type="submit" class="btn btn-primary" style="height: 42px; padding: 0 20px;">Upload & Parse OCR</button>
                                 </div>
-                                <div id="hr-attendance-teachers-list" style="display: flex; flex-direction: column; gap: 12px; width: 100%; max-height: 400px; overflow-y: auto; padding-right: 5px; margin-top: 10px;">
-                                    <!-- Dynamic rows from app.js -->
-                                </div>
-                            </div>
+                                <div id="hr-ocr-status" style="font-size: 0.9rem; margin-top: 5px;"></div>
+                            </form>
                         </div>
+
+
+
 
                         <!-- Leave Applications List -->
                         <h3 style="font-size: 1.1rem; color: #c9d1d9; margin-top: 25px;">Leave Applications</h3>
