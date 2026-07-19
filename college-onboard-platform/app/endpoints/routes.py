@@ -1371,7 +1371,6 @@ def trigger_action(req: ActionRequest, background_tasks: BackgroundTasks) -> dic
         if "applied_leaves" not in teacher:
             teacher["applied_leaves"] = []
             
-        import secrets
         leave_id = secrets.token_hex(4)
         
         new_leave = {
