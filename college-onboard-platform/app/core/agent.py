@@ -453,7 +453,7 @@ def get_salary_status_message(teacher_data: dict) -> str:
     return ""
 
 
-def generate_dynamic_companion_brief(teacher_name: str, department: str, designation: str, salary_msg: str, upcoming_meetings: list) -> str:
+def generate_dynamic_companion_brief(teacher_name: str, department: str, designation: str, salary_msg: str, upcoming_meetings: list, seating_info: str = "") -> str:
     """Generates a dynamic daily briefing message for a faculty member using Groq API."""
     import os
     import requests
@@ -464,6 +464,9 @@ def generate_dynamic_companion_brief(teacher_name: str, department: str, designa
     fallback_parts = []
     if salary_msg:
         fallback_parts.append(f"💰 **Salary Status**: {salary_msg}")
+    
+    if seating_info:
+        fallback_parts.append(f"🪑 **Seating Assigned**: {seating_info} — check the **Seating Info** tab to view your workspace details.")
     
     if upcoming_meetings:
         fallback_parts.append("\n📅 **Upcoming Meetings & Events**:")
@@ -487,6 +490,9 @@ def generate_dynamic_companion_brief(teacher_name: str, department: str, designa
         }
         
         meetings_str = "\n".join(upcoming_meetings) if upcoming_meetings else "None"
+        seating_note = f""
+        if seating_info:
+            seating_note = f"- Seating: {seating_info} (newly assigned — mention they should check the Seating Info tab)\n"
         prompt = f"""You are the PESU Companion daily brief generator for PES University's faculty onboarding portal.
 Generate a daily briefing message for a faculty member.
 
@@ -494,7 +500,7 @@ Faculty Member Details:
 - Name: {teacher_name}
 - Department: {department}
 - Designation: {designation}
-
+{seating_note}
 Current Status:
 - Salary Status: {salary_msg}
 - Upcoming Meetings & Public Holidays:
@@ -502,10 +508,11 @@ Current Status:
 
 Instructions:
 1. Format your response using clean Markdown. Use bold (**text**) and italics (*text*) to highlight key information or terms.
-2. If there are upcoming meetings/holidays, list them using bullet points (e.g. • or -) and write a short, welcoming summary.
-3. If there are NO upcoming meetings or public holidays, write a warm, encouraging check-in message and include an interesting, inspiring **Fun Fact** or **Productivity/Teaching Tip** to keep them motivated. There must always be one or the other content.
-4. Keep the entire briefing concise (under 80 words), professional, and warm.
-5. Do not include markdown headers (like # or ##). Avoid extra introductory or conversational text like "Here is your brief:". Start directly with the briefing content.
+2. If seating has been assigned, mention it warmly and tell them to check the Seating Info tab.
+3. If there are upcoming meetings/holidays, list them using bullet points (• or -) with the exact date and time provided — do NOT paraphrase or invent dates.
+4. If there are NO upcoming meetings or public holidays, write a warm, encouraging check-in message and include an interesting, inspiring **Fun Fact** or **Productivity/Teaching Tip**.
+5. Keep the entire briefing concise (under 80 words), professional, and warm.
+6. Do not include markdown headers (like # or ##). Start directly with the briefing content.
 """
 
         payload = {
@@ -538,7 +545,7 @@ Instructions:
     return default_brief
 
 
-def get_or_generate_companion_brief(teacher_data: dict, salary_msg: str, upcoming_meetings: list, today_str: str) -> tuple[str, bool, dict]:
+def get_or_generate_companion_brief(teacher_data: dict, salary_msg: str, upcoming_meetings: list, today_str: str, seating_info: str = "") -> tuple[str, bool, dict]:
     """
     Checks cache. Returns (brief, was_regenerated, updated_meta_to_save).
     """
@@ -548,7 +555,8 @@ def get_or_generate_companion_brief(teacher_data: dict, salary_msg: str, upcomin
     
     current_inputs = {
         "salary_msg": salary_msg,
-        "upcoming_meetings": sorted(upcoming_meetings)
+        "upcoming_meetings": sorted(upcoming_meetings),
+        "seating_info": seating_info,
     }
     
     if old_brief and last_date == today_str and last_inputs == current_inputs:
@@ -559,7 +567,8 @@ def get_or_generate_companion_brief(teacher_data: dict, salary_msg: str, upcomin
         department=teacher_data.get("department") or "",
         designation=teacher_data.get("designation") or "",
         salary_msg=salary_msg,
-        upcoming_meetings=upcoming_meetings
+        upcoming_meetings=upcoming_meetings,
+        seating_info=seating_info,
     )
     
     updated_meta = {

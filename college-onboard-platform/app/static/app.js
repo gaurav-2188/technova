@@ -2991,9 +2991,10 @@ async function initCalendar() {
         console.error('Error fetching meetings:', e);
     }
 
-    // Fetch initial class timetable
+    // Fetch initial class timetable — use personal schedule if logged in as a teacher
     try {
-        const res = await fetch('/api/calendar/timetable');
+        const timetableUrl = currentUser ? `/api/calendar/timetable?username=${encodeURIComponent(currentUser)}` : '/api/calendar/timetable';
+        const res = await fetch(timetableUrl);
         if (res.ok) {
             teacherSchedule = await res.json();
         }

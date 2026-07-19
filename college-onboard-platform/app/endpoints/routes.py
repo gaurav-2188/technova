@@ -402,6 +402,19 @@ def generate_ai_event_brief(title: str, description: str) -> dict:
     return default_res
 
 
+def format_time_to_ampm(time_str: str) -> str:
+    """Convert 24-hour time string (e.g. '14:30') to 12-hour AM/PM (e.g. '2:30 PM')."""
+    try:
+        parts = time_str.strip().split(':')
+        hours = int(parts[0])
+        minutes = int(parts[1]) if len(parts) > 1 else 0
+        ampm = 'AM' if hours < 12 else 'PM'
+        hours_12 = hours % 12 or 12
+        return f"{hours_12}:{minutes:02d} {ampm}"
+    except Exception:
+        return time_str
+
+
 def run_scheduler_agent_brief(state: dict, username: str) -> str:
     """Checks upcoming meetings (within 3 days) and public holidays (only today), and salary status."""
     import datetime
@@ -458,13 +471,14 @@ def run_scheduler_agent_brief(state: dict, username: str) -> str:
                         ai_brief = cached.get("ai_brief", desc)
                         
                     m_time = m.get("event_time") or m.get("time") or ""
-                    time_str = f" at {m_time}" if m_time else ""
+                    time_str = f" at {format_time_to_ampm(m_time)}" if m_time else ""
+                    date_label = event_date.strftime("%A, %b %d")  # e.g. "Saturday, Jul 20"
                     if delta == 0:
-                        upcoming_meetings.append(f"• {ai_title} is today{time_str}! (Brief Info: {ai_brief})")
+                        upcoming_meetings.append(f"• {ai_title} is today ({date_label}){time_str}! (Brief Info: {ai_brief})")
                     elif delta == 1:
-                        upcoming_meetings.append(f"• {ai_title} upcoming in 1 day{time_str} (Brief Info: {ai_brief})")
+                        upcoming_meetings.append(f"• {ai_title} on {date_label}{time_str} (Brief Info: {ai_brief})")
                     else:
-                        upcoming_meetings.append(f"• {ai_title} upcoming in {delta} days{time_str} (Brief Info: {ai_brief})")
+                        upcoming_meetings.append(f"• {ai_title} on {date_label}{time_str} (Brief Info: {ai_brief})")
             except Exception:
                 pass
             
@@ -495,12 +509,15 @@ def run_scheduler_agent_brief(state: dict, username: str) -> str:
     teacher_name = ""
     department = ""
     designation = ""
+    seating_info = ""
     t_data = {}
     if state and "teachers" in state and username in state["teachers"]:
         t_data = state["teachers"][username]
         teacher_name = t_data.get("name") or username or ""
         department = t_data.get("department") or ""
         designation = t_data.get("designation") or ""
+        raw_seating = t_data.get("seating_info", "Not Allotted")
+        seating_info = raw_seating if raw_seating and raw_seating != "Not Allotted" else ""
 
     # 3. Salary status check (mock status, 24-hour limit check)
     from app.core.agent import get_salary_status_message
@@ -512,7 +529,8 @@ def run_scheduler_agent_brief(state: dict, username: str) -> str:
         teacher_data=t_data,
         salary_msg=salary_msg,
         upcoming_meetings=upcoming_meetings,
-        today_str=today_str
+        today_str=today_str,
+        seating_info=seating_info
     )
     if was_new and t_data:
         t_data.update(updated_meta)
@@ -2055,12 +2073,34 @@ def delete_calendar_meeting(id: str) -> dict:
 
 # ------------------ TIMETABLE ENDPOINTS ------------------
 @router.get("/api/calendar/timetable")
-def get_calendar_timetable() -> List[dict]:
-    print("[GET /api/calendar/timetable] Fetching timetable...")
+def get_calendar_timetable(username: Optional[str] = None) -> List[dict]:
+    print(f"[GET /api/calendar/timetable] Fetching timetable... username={username}")
     store = LocalStateStore()
     state = store.load_state()
+
+    # If a username is provided, return that specific teacher's personal schedule.
+    # This ensures admin timetable changes (saved to teacher.schedule) are immediately
+    # visible in the teacher's calendar view without touching the global timetable table.
+    if username:
+        teachers = state.get("teachers", {}) if state else {}
+        teacher = teachers.get(username, {})
+        raw_sched = teacher.get("schedule", [])
+        result = []
+        for idx, s in enumerate(raw_sched):
+            result.append({
+                "id": f"{username}_{idx}",
+                "subject_name": s.get("subject", "Lecture"),
+                "time_slot": s.get("time", ""),
+                "classroom": s.get("class", ""),
+                "day_of_week": s.get("day", ""),
+                "subject": s.get("subject", "Lecture"),
+                "time": s.get("time", ""),
+                "class": s.get("class", ""),
+                "day": s.get("day", ""),
+            })
+        return result
     
-    # Try fetching from Supabase 'timetable_classes' table first
+    # Global timetable — try Supabase first
     from supabase import create_client
     supabase_url = os.getenv("SUPABASE_URL", "").strip()
     supabase_key = os.getenv("SUPABASE_KEY", "").strip()
@@ -2080,7 +2120,6 @@ def get_calendar_timetable() -> List[dict]:
             
     # Fallback to local state
     if "timetable_classes" not in state:
-        # Load from default teacher schedule if exists
         teacher = state.get("teachers", {}).get("teacher", {})
         if "schedule" in teacher:
             raw_sched = teacher["schedule"]
@@ -2282,19 +2321,24 @@ def update_teacher_schedule(payload: dict) -> dict:
     if "teachers" not in state or teacher_username not in state["teachers"]:
         raise HTTPException(status_code=404, detail="Teacher not found.")
         
+    # Save schedule to the teacher's own record (source of truth for their personal timetable)
     state["teachers"][teacher_username]["schedule"] = schedule_data
     
-    # Also update timetable classes table mapping
-    migrated = []
+    # Rebuild global timetable_classes preserving entries from OTHER teachers,
+    # then replace this teacher's entries. This prevents one teacher's save from
+    # wiping all other teachers' classes from the global list.
+    existing = state.get("timetable_classes", [])
+    other_entries = [c for c in existing if not str(c.get("id", "")).startswith(f"{teacher_username}_")]
+    this_teacher_entries = []
     for idx, s in enumerate(schedule_data):
-        migrated.append({
-            "id": str(idx + 1),
-            "subject_name": s.get("subject"),
-            "time_slot": s.get("time"),
-            "classroom": s.get("class"),
-            "day_of_week": s.get("day")
+        this_teacher_entries.append({
+            "id": f"{teacher_username}_{idx}",
+            "subject_name": s.get("subject", "Lecture"),
+            "time_slot": s.get("time", ""),
+            "classroom": s.get("class", ""),
+            "day_of_week": s.get("day", ""),
         })
-    state["timetable_classes"] = migrated
+    state["timetable_classes"] = other_entries + this_teacher_entries
     store.save_state(state)
     write_log("ADMIN_CALENDAR", f"Updated class schedule for teacher '{teacher_username}'")
     return {"status": "success", "schedule": schedule_data}
