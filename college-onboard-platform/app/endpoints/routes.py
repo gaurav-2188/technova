@@ -894,7 +894,8 @@ def run_scheduler_agent_brief(state: dict, username: str) -> str:
     if was_new and t_data:
         t_data.update(updated_meta)
         
-    return pesu_companion_brief
+    return pesu_companion_brief, was_new
+
 
 
 @router.post("/api/leaves/apply")
@@ -997,9 +998,11 @@ async def get_state() -> dict:
     for username, teacher in state.get("teachers", {}).items():
         if teacher.get("onboarding_completed"):
             old_brief = teacher.get("pesu_companion_brief", "")
-            new_brief = run_scheduler_agent_brief(state, username)
+            new_brief, brief_modified = run_scheduler_agent_brief(state, username)
             if old_brief != new_brief:
                 teacher["pesu_companion_brief"] = new_brief
+                modified = True
+            if brief_modified:
                 modified = True
                 
     if len(state.get("holiday_briefs_cache", {})) != initial_holiday_cache_len:
