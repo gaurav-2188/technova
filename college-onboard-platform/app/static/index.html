@@ -33,9 +33,12 @@
                         <input type="text" id="username" placeholder="Enter username (e.g. teacher, hr, admin)"
                             required>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" style="margin-bottom: 25px;">
                         <label for="password">Password</label>
                         <input type="password" id="password" placeholder="Enter password" required>
+                        <div style="text-align: right; margin-top: 8px;">
+                            <a href="#" id="forgot-password-link" style="color: #58a6ff; font-size: 0.85rem; text-decoration: none;">Forgot Password?</a>
+                        </div>
                     </div>
                     <button type="submit" class="btn btn-primary btn-block">Sign In Securely</button>
                 </form>
@@ -1201,7 +1204,44 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=2.1.7"></script>
+    <!-- Forgot Password Modal -->
+    <div id="forgot-password-modal" class="modal hidden" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px); z-index: 10000; display: flex; align-items: center; justify-content: center;">
+        <div class="modal-content glass-card" style="max-width: 480px; width: 90%; text-align: center; margin: auto; padding: 40px 30px;">
+            <div style="font-size: 3rem; margin-bottom: 15px; text-shadow: 0 0 20px rgba(88, 166, 255, 0.5);">🔐</div>
+            <h3 id="forgot-password-title" style="font-size: 1.8rem; margin-top: 0; margin-bottom: 10px; font-weight: 700;">Reset Password</h3>
+            
+            <div id="fp-step-1">
+                <p style="margin-bottom: 25px; color: #8b949e; font-size: 1.05rem;">Enter your username to receive a confirmation code.</p>
+                <div class="form-group" style="text-align: left; margin-bottom: 25px;">
+                    <label for="fp-username" style="display: block; margin-bottom: 8px; color: #c9d1d9; font-size: 0.9rem;">Username</label>
+                    <input type="text" id="fp-username" placeholder="Enter username (e.g. teacher, hr, admin)" style="padding: 12px 15px; font-size: 1rem;">
+                </div>
+                <button id="fp-request-btn" class="btn btn-primary btn-block" style="padding: 12px; font-size: 1.05rem; font-weight: 600;">Send Confirmation Code</button>
+            </div>
+            
+            <div id="fp-step-2" class="hidden">
+                <p style="margin-bottom: 25px; color: #8b949e; font-size: 1.05rem;">We've sent a 6-digit code to your registered email.</p>
+                <div class="form-group" style="text-align: left; margin-bottom: 15px;">
+                    <label for="fp-code" style="display: block; margin-bottom: 8px; color: #c9d1d9; font-size: 0.9rem;">Confirmation Code</label>
+                    <input type="text" id="fp-code" placeholder="Enter 6-digit code" style="padding: 12px 15px; font-size: 1rem; letter-spacing: 2px; text-align: center;">
+                </div>
+                <button id="fp-validate-btn" class="btn btn-primary btn-block" style="padding: 12px; font-size: 1.05rem; font-weight: 600;">Validate Code</button>
+                
+                <div id="fp-step-3" class="hidden" style="margin-top: 25px; padding-top: 25px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <p style="margin-bottom: 15px; color: #56d364; font-size: 1rem;">Code confirmed! Create a new password.</p>
+                    <div class="form-group" style="text-align: left; margin-bottom: 25px;">
+                        <label for="fp-new-password" style="display: block; margin-bottom: 8px; color: #c9d1d9; font-size: 0.9rem;">New Password</label>
+                        <input type="password" id="fp-new-password" placeholder="Enter new password" style="padding: 12px 15px; font-size: 1rem;">
+                    </div>
+                    <button id="fp-reset-btn" class="btn btn-success btn-block" style="padding: 12px; font-size: 1.05rem; font-weight: 600;">Reset Password</button>
+                </div>
+            </div>
+            
+            <button id="fp-close-btn" class="btn btn-secondary btn-block mt-3" style="background: transparent; border: 1px solid rgba(255,255,255,0.2); padding: 10px; font-size: 0.95rem; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">Cancel</button>
+        </div>
+    </div>
+
+    <script src="/static/app.js?v=2.1.8"></script>
 </body>
 
 </html>

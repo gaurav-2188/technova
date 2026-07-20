@@ -654,6 +654,7 @@ function updateDashboardView() {
                     };
                     statusElem.innerText = getFileName(path);
                     dropArea.style.pointerEvents = 'none';
+                    if (fileInput) fileInput.disabled = true;
                     if (button) {
                         button.disabled = true;
                         button.innerHTML = `<span>${status === 'approved' ? 'Approved ✓' : 'Pending Review'}</span>`;
@@ -662,13 +663,14 @@ function updateDashboardView() {
                 } else {
                     card.classList.remove('staged');
                     dropArea.style.pointerEvents = 'auto';
+                    if (fileInput) fileInput.disabled = false;
                     if (button) {
                         button.disabled = false;
                         button.innerHTML = `<span>Choose PDF</span><span class="upload-btn-arrow">📤</span>`;
                         button.style.pointerEvents = 'auto';
                     }
 
-                    if (status === 'rejected') {
+                    if (status === 'rejected' && !(fileInput && fileInput.files && fileInput.files.length > 0)) {
                         statusElem.innerHTML = `<span style="color:#ff6b6b; font-weight:500;">Rejected. Please re-upload.</span>`;
                     } else {
                         if (fileInput && fileInput.files && fileInput.files.length > 0) {
@@ -1984,21 +1986,14 @@ if (batchSubmitBtn) {
                         method: 'POST',
                         body: formData
                     });
-                    if (!res.ok) success = false;
+                    if (!res.ok) {
+                        throw new Error(`Upload failed for ${item.type}`);
+                    }
                 }
-
-                if (success) {
-                    isUploading = false;
-                    syncStateData();
-                } else {
-                    // Rollback
-                    systemState.teachers[currentUser] = originalTeacher;
-                    isUploading = false;
-                    updateDashboardView();
-                    alert('One or more document uploads failed.');
-                    updateSubmitButtonState();
-                }
-            } catch (e) {
+                isUploading = false;
+                syncStateData();
+            } catch (err) {
+                console.error(err);
                 // Rollback
                 systemState.teachers[currentUser] = originalTeacher;
                 isUploading = false;
@@ -4436,3 +4431,129 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+// FORGOT PASSWORD FLOW
+const fpLink = document.getElementById('forgot-password-link');
+const fpModal = document.getElementById('forgot-password-modal');
+const fpStep1 = document.getElementById('fp-step-1');
+const fpStep2 = document.getElementById('fp-step-2');
+const fpStep3 = document.getElementById('fp-step-3');
+const fpUsername = document.getElementById('fp-username');
+const fpRequestBtn = document.getElementById('fp-request-btn');
+const fpCode = document.getElementById('fp-code');
+const fpValidateBtn = document.getElementById('fp-validate-btn');
+const fpNewPassword = document.getElementById('fp-new-password');
+const fpResetBtn = document.getElementById('fp-reset-btn');
+const fpCloseBtn = document.getElementById('fp-close-btn');
+
+if (fpLink) {
+    fpLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        fpModal.classList.remove('hidden');
+        fpStep1.classList.remove('hidden');
+        fpStep2.classList.add('hidden');
+        if (fpStep3) fpStep3.classList.add('hidden');
+        if (fpValidateBtn) fpValidateBtn.classList.remove('hidden');
+        if (fpCode) fpCode.disabled = false;
+        fpUsername.value = '';
+        fpCode.value = '';
+        fpNewPassword.value = '';
+    });
+}
+
+if (fpCloseBtn) {
+    fpCloseBtn.addEventListener('click', () => {
+        fpModal.classList.add('hidden');
+    });
+}
+
+if (fpRequestBtn) {
+    fpRequestBtn.addEventListener('click', async () => {
+        const username = fpUsername.value.trim();
+        if (!username) return alert('Please enter a username');
+        try {
+            fpRequestBtn.disabled = true;
+            fpRequestBtn.innerText = 'Sending...';
+            const res = await fetch('/api/forgot-password', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username})
+            });
+            const data = await res.json();
+            if (res.ok) {
+                fpStep1.classList.add('hidden');
+                fpStep2.classList.remove('hidden');
+            } else {
+                alert(data.detail || 'Error requesting reset code');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Failed to connect to server');
+        } finally {
+            fpRequestBtn.disabled = false;
+            fpRequestBtn.innerText = 'Send Confirmation Code';
+        }
+    });
+}
+
+if (fpValidateBtn) {
+    fpValidateBtn.addEventListener('click', async () => {
+        const username = fpUsername.value.trim();
+        const code = fpCode.value.trim();
+        if (!code) return alert('Please enter the confirmation code');
+        try {
+            fpValidateBtn.disabled = true;
+            fpValidateBtn.innerText = 'Validating...';
+            const res = await fetch('/api/validate-reset-code', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username, code})
+            });
+            const data = await res.json();
+            if (res.ok) {
+                fpCode.disabled = true;
+                fpValidateBtn.classList.add('hidden');
+                fpStep3.classList.remove('hidden');
+            } else {
+                alert(data.detail || 'Invalid confirmation code');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Failed to connect to server');
+        } finally {
+            fpValidateBtn.disabled = false;
+            fpValidateBtn.innerText = 'Validate Code';
+        }
+    });
+}
+
+if (fpResetBtn) {
+    fpResetBtn.addEventListener('click', async () => {
+        const username = fpUsername.value.trim();
+        const code = fpCode.value.trim();
+        const new_password = fpNewPassword.value.trim();
+        if (!new_password) return alert('Please enter a new password');
+        try {
+            fpResetBtn.disabled = true;
+            fpResetBtn.innerText = 'Resetting...';
+            const res = await fetch('/api/reset-password', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username, code, new_password})
+            });
+            const data = await res.json();
+            if (res.ok) {
+                alert('Password reset successfully! You can now log in.');
+                fpModal.classList.add('hidden');
+            } else {
+                alert(data.detail || 'Error resetting password');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Failed to connect to server');
+        } finally {
+            fpResetBtn.disabled = false;
+            fpResetBtn.innerText = 'Reset Password';
+        }
+    });
+}

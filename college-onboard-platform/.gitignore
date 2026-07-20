@@ -207,3 +207,4 @@ tools/a2a-inspector/
 app/static/uploads/
 state_store.json
 agent_activity.log
+Dockerfile.zip

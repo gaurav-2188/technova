@@ -7,6 +7,7 @@ import os
 import datetime
 import secrets
 import re
+import time
 from app.core.privacy import DataMaskingMiddleware
 from app.core.local_storage import LocalStateStore
 from app.app_utils.telemetry import track_memory
@@ -36,6 +37,16 @@ class ActionRequest(BaseModel):
     action: str  # e.g., "approve_interview", "upload_documents", "schedule", "allotment", "provision"
     payload: Optional[Any] = None
 
+class ForgotPasswordRequest(BaseModel):
+    username: str
+
+from typing import Optional
+
+class ResetPasswordRequest(BaseModel):
+    username: str
+    code: str
+    new_password: Optional[str] = None
+
 @router.get("/health")
 def health_check() -> dict:
     """Production health check endpoint for Render service verification."""
@@ -50,6 +61,123 @@ def webhook_upload(payload: dict) -> dict:
         "details": "Payload successfully scrubbed & queued.",
         "payload": scrubbed
     }
+
+@router.post("/api/forgot-password")
+def api_forgot_password(req: ForgotPasswordRequest) -> dict:
+    store = LocalStateStore()
+    state = store.load_state()
+    if not state or "teachers" not in state:
+        raise HTTPException(status_code=404, detail="System state not available")
+        
+    username = req.username
+    teacher_data = None
+    
+    # Check if input is a valid username
+    if username in state["teachers"]:
+        teacher_data = state["teachers"][username]
+    else:
+        # Check if input is an email address
+        for uname, data in state["teachers"].items():
+            if data.get("email") == username:
+                username = uname
+                teacher_data = data
+                break
+                
+    if not teacher_data:
+        raise HTTPException(status_code=404, detail="Username or email not found")
+    
+    code = f"{secrets.randbelow(1000000):06d}"
+    teacher_data["reset_code"] = code
+    store.save_state(state)
+    
+    # Actually send email
+    from app.app_utils.email import send_email
+    
+    email_address = teacher_data.get("email")
+    if email_address:
+        subject = "PES University - Password Reset Code"
+        body = f"""
+        <html>
+        <body>
+            <h2>Password Reset</h2>
+            <p>Hello {teacher_data.get('name', username)},</p>
+            <p>You requested a password reset. Your 6-digit confirmation code is:</p>
+            <h1 style="color: #2ea043; letter-spacing: 5px;">{code}</h1>
+            <p>If you did not request this, please ignore this email.</p>
+        </body>
+        </html>
+        """
+        success = send_email(email_address, subject, body, is_html=True)
+        if success:
+            msg = f"PASSWORD RESET CODE for {username} sent to {email_address}"
+            print(f"\n[EMAIL DISPATCHED] {msg}\n")
+            return {"status": "success", "message": f"Confirmation code sent to {email_address}"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to dispatch email. Check server logs.")
+    else:
+        raise HTTPException(status_code=400, detail="No email address registered for this user.")
+
+@router.post("/api/validate-reset-code")
+def api_validate_reset_code(req: ResetPasswordRequest) -> dict:
+    store = LocalStateStore()
+    state = store.load_state()
+    if not state or "teachers" not in state:
+        raise HTTPException(status_code=404, detail="System state not available")
+        
+    username = req.username
+    teacher = None
+    
+    if username in state["teachers"]:
+        teacher = state["teachers"][username]
+    else:
+        for uname, data in state["teachers"].items():
+            if data.get("email") == username:
+                username = uname
+                teacher = data
+                break
+                
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Username or email not found")
+        
+    if "reset_code" not in teacher or teacher["reset_code"] != req.code:
+        raise HTTPException(status_code=400, detail="Invalid confirmation code")
+        
+    return {"status": "success", "message": "Code validated"}
+
+@router.post("/api/reset-password")
+def api_reset_password(req: ResetPasswordRequest) -> dict:
+    store = LocalStateStore()
+    state = store.load_state()
+    if not state or "teachers" not in state:
+        raise HTTPException(status_code=404, detail="System state not available")
+        
+    username = req.username
+    teacher = None
+    
+    if username in state["teachers"]:
+        teacher = state["teachers"][username]
+    else:
+        # Check if input is an email address
+        for uname, data in state["teachers"].items():
+            if data.get("email") == username:
+                username = uname
+                teacher = data
+                break
+                
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Username or email not found")
+        
+    if "reset_code" not in teacher or teacher["reset_code"] != req.code:
+        raise HTTPException(status_code=400, detail="Invalid confirmation code")
+    
+    if not req.new_password:
+        raise HTTPException(status_code=400, detail="New password cannot be empty")
+        
+    teacher["password"] = req.new_password
+    del teacher["reset_code"]
+    store.save_state(state)
+    
+    return {"status": "success", "message": "Password successfully reset"}
 
 @router.post("/api/upload")
 @track_memory
@@ -1565,7 +1693,6 @@ def trigger_action(req: ActionRequest, background_tasks: BackgroundTasks) -> dic
         name = clean_and_capitalize_name(payload.get("name"))
         password = secrets.token_urlsafe(10)
 
-        import time
         state["teachers"][username] = {
             "name": name,
             "email": email,
