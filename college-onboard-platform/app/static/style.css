@@ -1296,11 +1296,11 @@ body {
     color: #6b7280 !important;
 }
 
-input[type="time"] {
+input[type="time"], input[type="date"] {
     color: #ffffff !important;
     color-scheme: dark !important;
 }
-input[type="time"]::-webkit-calendar-picker-indicator {
+input[type="time"]::-webkit-calendar-picker-indicator, input[type="date"]::-webkit-calendar-picker-indicator {
     filter: invert(1) !important;
     cursor: pointer;
 }

@@ -93,7 +93,8 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 @app.get("/")
 def read_index():
-    return FileResponse(os.path.join(static_dir, "index.html"))
+    headers = {"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"}
+    return FileResponse(os.path.join(static_dir, "index.html"), headers=headers)
 
 
 # Ambient Background Operator definition
