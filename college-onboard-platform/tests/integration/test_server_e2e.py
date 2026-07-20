@@ -310,19 +310,7 @@ def test_profile_photo_upload_and_delete(server_fixture: subprocess.Popen[str]) 
     assert state2["teachers"]["teacher"].get("profile_photo_url") == ""
 
 
-def make_excel(emp_ids: list[str]) -> bytes:
-    import io
-    import openpyxl
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    for i, emp_id in enumerate(emp_ids):
-        ws.cell(row=i+1, column=1, value=emp_id)
-    out = io.BytesIO()
-    wb.save(out)
-    return out.getvalue()
-
-
-def test_excel_attendance_flow(server_fixture: subprocess.Popen[str]) -> None:
+def test_ocr_attendance_flow(server_fixture: subprocess.Popen[str]) -> None:
     # 1. Reset state to default first to ensure clean test environment
     requests.post(BASE_URL + "/api/state/reset")
     
@@ -333,16 +321,13 @@ def test_excel_attendance_flow(server_fixture: subprocess.Popen[str]) -> None:
     assert "teacher" in state["teachers"]
     
     # 2. Test Rule 1: Present (teacher details found in document)
-    excel_content = make_excel(["PESU-1234"])
-    files = {"file": ("attendance.xlsx", excel_content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+    pdf_content = b"Teacher Name: Jane Doe\nEmail: jane.doe@pes.edu\nID: PESU-1234\n"
+    files = {"file": ("attendance.pdf", pdf_content, "application/pdf")}
     data = {"date": "2026-07-10"}
     
-    # Check initial counters: present_days is 24, absent_days is 2, loss_of_pay_leaves is 0
+    # Check initial present_days is 24
     initial_state = requests.get(BASE_URL + "/api/state").json()
-    teacher_initial = initial_state["teachers"]["teacher"]
-    assert teacher_initial.get("present_days") == 24
-    assert teacher_initial.get("absent_days") == 2
-    assert teacher_initial.get("loss_of_pay_leaves") == 0
+    assert initial_state["teachers"]["teacher"].get("present_days") == 24
 
     res = requests.post(BASE_URL + "/api/attendance/ocr-upload", files=files, data=data)
     assert res.status_code == 200
@@ -355,14 +340,12 @@ def test_excel_attendance_flow(server_fixture: subprocess.Popen[str]) -> None:
     attendance_dates = {att["date"]: att["status"] for att in teacher["attendance"]}
     assert "2026-07-10" in attendance_dates
     assert attendance_dates["2026-07-10"] == "Present"
-    # present_days should increment to 25, absent_days remain 2, lop remain 0
+    # present_days should increment to 25
     assert teacher.get("present_days") == 25
-    assert teacher.get("absent_days") == 2
-    assert teacher.get("loss_of_pay_leaves") == 0
     
     # 3. Test Rule 3: Loss of Pay (teacher details NOT in document, and NO approved leave application)
-    excel_content_absent = make_excel(["PESU-9999"])
-    files_absent = {"file": ("attendance.xlsx", excel_content_absent, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+    pdf_content_absent = b"Teacher Name: Other Teacher\nEmail: other@pes.edu\nID: PESU-9999\n"
+    files_absent = {"file": ("attendance.pdf", pdf_content_absent, "application/pdf")}
     data_absent = {"date": "2026-07-11"}
     
     res_absent = requests.post(BASE_URL + "/api/attendance/ocr-upload", files=files_absent, data=data_absent)
@@ -376,7 +359,6 @@ def test_excel_attendance_flow(server_fixture: subprocess.Popen[str]) -> None:
     assert attendance_dates["2026-07-11"][0] == "Absent"
     assert attendance_dates["2026-07-11"][1] == "Loss of Pay"
     assert teacher.get("loss_of_pay_leaves") == 1
-    assert teacher.get("absent_days") == 3
     # present_days should remain 25
     assert teacher.get("present_days") == 25
 
@@ -407,7 +389,7 @@ def test_excel_attendance_flow(server_fixture: subprocess.Popen[str]) -> None:
     approve_res = requests.post(BASE_URL + "/api/action", json=approve_data, headers=HEADERS)
     assert approve_res.status_code == 200
     
-    files_rule2 = {"file": ("attendance.xlsx", excel_content_absent, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+    files_rule2 = {"file": ("attendance.pdf", pdf_content_absent, "application/pdf")}
     data_rule2 = {"date": "2026-07-12"}
     res_rule2 = requests.post(BASE_URL + "/api/attendance/ocr-upload", files=files_rule2, data=data_rule2)
     assert res_rule2.status_code == 200
@@ -419,6 +401,5 @@ def test_excel_attendance_flow(server_fixture: subprocess.Popen[str]) -> None:
     assert attendance_dates["2026-07-12"][0] == "Absent"
     assert "Regular Leave" in attendance_dates["2026-07-12"][1]
     assert teacher.get("loss_of_pay_leaves") == 1
-    assert teacher.get("absent_days") == 4
     # present_days should remain 25
     assert teacher.get("present_days") == 25

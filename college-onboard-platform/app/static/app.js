@@ -7,9 +7,6 @@ let editingSeating = {};
 let isUploading = false;
 window.isConfirming = false;
 
-// Keep reference to native alert
-const nativeAlert = window.alert;
-
 // Beautiful Custom Modal Dialog (Alert/Confirm) Helpers
 window.showCustomAlert = function(title, message, icon = '⚠️') {
     return new Promise((resolve) => {
@@ -19,12 +16,6 @@ window.showCustomAlert = function(title, message, icon = '⚠️') {
         const msgEl = document.getElementById('custom-alert-message');
         const okBtn = document.getElementById('custom-alert-ok');
         const cancelBtn = document.getElementById('custom-alert-cancel');
-        
-        if (!modal || !iconEl || !titleEl || !msgEl || !okBtn || !cancelBtn) {
-            if (nativeAlert) nativeAlert(`${title}: ${message}`);
-            resolve(true);
-            return;
-        }
         
         iconEl.innerText = icon;
         titleEl.innerText = title;
@@ -52,12 +43,6 @@ window.showCustomConfirm = function(title, message, icon = '❓') {
         const msgEl = document.getElementById('custom-alert-message');
         const okBtn = document.getElementById('custom-alert-ok');
         const cancelBtn = document.getElementById('custom-alert-cancel');
-        
-        if (!modal || !iconEl || !titleEl || !msgEl || !okBtn || !cancelBtn) {
-            const confirmed = confirm(`${title}: ${message}`);
-            resolve(confirmed);
-            return;
-        }
         
         iconEl.innerText = icon;
         titleEl.innerText = title;
@@ -96,11 +81,6 @@ window.alert = function(msg) {
         title = 'Success';
         icon = '✅';
     }
-    const modal = document.getElementById('custom-alert-modal');
-    if (!modal) {
-        if (nativeAlert) nativeAlert(msg);
-        return;
-    }
     window.showCustomAlert(title, msg, icon);
 };
 
@@ -127,24 +107,18 @@ const sidebarName = document.getElementById('sidebar-name');
 const sidebarEmail = document.getElementById('sidebar-email');
 
 // Handle Login Form Submit
-if (loginForm) {
-    loginForm.addEventListener('submit', (e) => {
-        try {
-            e.preventDefault();
-            const username = usernameInput ? usernameInput.value.trim().toLowerCase() : '';
-            const password = passwordInput ? passwordInput.value.trim() : '';
-            console.log("[LOGIN SUBMIT] Username/Email:", username, "Password length:", password.length);
-            authenticate(username, password);
-        } catch (err) {
-            console.error("[LOGIN SUBMIT ERROR]", err);
-        }
-    });
-}
+loginForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value.trim();
+
+    authenticate(username, password);
+});
 
 async function authenticate(username, password) {
     // 1. Fetch current database state to check user credentials
     try {
-        const res = await fetch('/api/state?t=' + Date.now());
+        const res = await fetch('/api/state');
         const state = await res.json();
         systemState = state;
 
@@ -153,149 +127,119 @@ async function authenticate(username, password) {
         let userData = null;
 
         // Check defaults first
-        if (username === 'admin' || username === 'pes chairperson' || username === 'chairperson@pes.edu') {
-            if (password === 'password') {
+        if (username === 'admin' && password === 'password') {
+            authenticated = true;
+            role = 'admin';
+            userData = { name: 'PES Chairperson', email: 'chairperson@pes.edu' };
+        } else if (username === 'hr' && password === 'password') {
+            authenticated = true;
+            role = 'hr';
+            userData = { name: 'HR Desk Officer', email: 'hr.onboarding@pes.edu' };
+        } else if (state.teachers && state.teachers[username]) {
+            const teacher = state.teachers[username];
+            if (teacher.password === password) {
                 authenticated = true;
-                role = 'admin';
-                userData = { name: 'PES Chairperson', email: 'chairperson@pes.edu' };
-                username = 'admin';
-            }
-        } else if (username === 'hr' || username === 'hr desk officer' || username === 'hr.onboarding@pes.edu') {
-            if (password === 'password') {
-                authenticated = true;
-                role = 'hr';
-                userData = { name: 'HR Desk Officer', email: 'hr.onboarding@pes.edu' };
-                username = 'hr';
-            }
-        } else if (state.teachers) {
-            // Find by username, email, or name
-            for (const uname in state.teachers) {
-                const t = state.teachers[uname];
-                const tName = (t.name || '').toLowerCase();
-                const tEmail = (t.email || '').toLowerCase();
-                const tUname = uname.toLowerCase();
-                
-                if (username === tUname || username === tEmail || username === tName || username.replace('dr.', '').trim() === tName.replace('dr.', '').trim()) {
-                    if (t.password === password) {
-                        authenticated = true;
-                        role = 'candidate';
-                        username = uname; // Ensure currentUser matches the canonical key
-                        userData = t;
-                        break;
-                    }
-                }
+                role = 'candidate';
+                userData = teacher;
             }
         }
 
         if (!authenticated) {
-            console.log("[AUTHENTICATION FAILURE] Invalid credentials for:", username);
             await showCustomAlert('Sign In Failed', 'Invalid credentials. Please refer to login hint below the card.', '🔒');
             return;
         }
 
-        try {
-            // Setup session
-            currentUser = username;
-            currentRole = role;
+        // Setup session
+        currentUser = username;
+        currentRole = role;
 
-            // Visual routing transformations
-            if (loginScreen) loginScreen.classList.add('hidden');
-            if (portalScreen) portalScreen.classList.remove('hidden');
+        // Visual routing transformations
+        loginScreen.classList.add('hidden');
+        portalScreen.classList.remove('hidden');
 
-            // Render menus based on role
-            if (candidateMenu) candidateMenu.classList.add('hidden');
-            if (hrMenu) hrMenu.classList.add('hidden');
-            if (adminMenu) adminMenu.classList.add('hidden');
+        // Render menus based on role
+        candidateMenu.classList.add('hidden');
+        hrMenu.classList.add('hidden');
+        adminMenu.classList.add('hidden');
 
-            if (role === 'candidate') {
-                if (candidateMenu) candidateMenu.classList.remove('hidden');
-                if (roleBadge) {
-                    roleBadge.innerText = 'Candidate / Teacher';
-                    roleBadge.className = 'badge badge-info';
-                }
-                if (announcementsSidebar) announcementsSidebar.classList.remove('hidden');
-                // Eagerly load bank details so the form is scoped to this user immediately
-                loadBankDetails();
-                loadSalaryHistory();
-                switchTab('candidate-profile');
-            } else if (role === 'hr') {
-                if (hrMenu) hrMenu.classList.remove('hidden');
-                if (roleBadge) {
-                    roleBadge.innerText = 'HR Department';
-                    roleBadge.className = 'badge badge-success';
-                }
-                if (announcementsSidebar) announcementsSidebar.classList.add('hidden');
-                switchTab('hr-teachers-list');
-            } else if (role === 'admin') {
-                if (adminMenu) adminMenu.classList.remove('hidden');
-                if (roleBadge) {
-                    roleBadge.innerText = 'Chairperson / Admin';
-                    roleBadge.className = 'badge badge-danger';
-                }
-                if (announcementsSidebar) announcementsSidebar.classList.remove('hidden');
-                switchTab('admin-seating-allotment');
-            }
-
-            // Set sidebar user details
-            if (sidebarName) sidebarName.innerText = userData.name;
-            if (sidebarEmail) sidebarEmail.innerText = userData.email;
-            if (userDisplayName) userDisplayName.innerText = userData.name;
-
-            // Update chatbot heading
-            const chatbotHeading = document.getElementById('chatbot-heading');
-            if (chatbotHeading) {
-                chatbotHeading.innerText = `Hello ${userData.name}, how can I help you today?`;
-            }
-
-            // Render data values
-            loadChatHistory();
-            updateDashboardView();
-
-            // Start real-time polling
-            clearInterval(pollInterval);
-            pollInterval = setInterval(syncStateData, 3000);
-            console.log("[AUTHENTICATION SUCCESS] Logged in as:", role, username);
-        } catch (uiErr) {
-            console.error("[LOGIN UI RENDER ERROR]", uiErr);
+        if (role === 'candidate') {
+            candidateMenu.classList.remove('hidden');
+            roleBadge.innerText = 'Candidate / Teacher';
+            roleBadge.className = 'badge badge-info';
+            announcementsSidebar.classList.remove('hidden');
+            // Eagerly load bank details so the form is scoped to this user immediately
+            loadBankDetails();
+            loadSalaryHistory();
+            // Trigger default tab
+            switchTab('candidate-profile');
+        } else if (role === 'hr') {
+            hrMenu.classList.remove('hidden');
+            roleBadge.innerText = 'HR Department';
+            roleBadge.className = 'badge badge-success';
+            announcementsSidebar.classList.add('hidden');
+            switchTab('hr-teachers-list');
+        } else if (role === 'admin') {
+            adminMenu.classList.remove('hidden');
+            roleBadge.innerText = 'Chairperson / Admin';
+            roleBadge.className = 'badge badge-danger';
+            announcementsSidebar.classList.remove('hidden');
+            switchTab('admin-seating-allotment');
         }
 
+        // Set sidebar user details
+        sidebarName.innerText = userData.name;
+        sidebarEmail.innerText = userData.email;
+        userDisplayName.innerText = userData.name;
+
+        // Update chatbot heading
+        const chatbotHeading = document.getElementById('chatbot-heading');
+        if (chatbotHeading) {
+            chatbotHeading.innerText = `Hello ${userData.name}, how can I help you today?`;
+        }
+
+        // Render data values
+        loadChatHistory();
+        updateDashboardView();
+
+        // Start real-time polling
+        clearInterval(pollInterval);
+        pollInterval = setInterval(syncStateData, 3000);
+
     } catch (e) {
-        console.error("[LOGIN API EXCEPTION]", e);
+        console.error(e);
         alert('Server communication error. Make sure the uvicorn server is running.');
     }
 }
 
 // Sign Out
-if (logoutBtn) {
-    logoutBtn.addEventListener('click', () => {
-        currentUser = null;
-        currentRole = null;
-        if (portalScreen) portalScreen.classList.add('hidden');
-        if (loginScreen) loginScreen.classList.remove('hidden');
-        if (usernameInput) usernameInput.value = '';
-        if (passwordInput) passwordInput.value = '';
-        clearInterval(pollInterval);
+logoutBtn.addEventListener('click', () => {
+    currentUser = null;
+    currentRole = null;
+    portalScreen.classList.add('hidden');
+    loginScreen.classList.remove('hidden');
+    usernameInput.value = '';
+    passwordInput.value = '';
+    clearInterval(pollInterval);
 
-        // Clear bank details form to prevent data leakage to the next user
-        const bankNameEl = document.getElementById('bank-account-name');
-        const bankNumberEl = document.getElementById('bank-account-number');
-        const bankIfscEl = document.getElementById('bank-ifsc');
-        if (bankNameEl) bankNameEl.value = '';
-        if (bankNumberEl) bankNumberEl.value = '';
-        if (bankIfscEl) bankIfscEl.value = '';
-        toggleBankInputs(false);
+    // Clear bank details form to prevent data leakage to the next user
+    const bankNameEl = document.getElementById('bank-account-name');
+    const bankNumberEl = document.getElementById('bank-account-number');
+    const bankIfscEl = document.getElementById('bank-ifsc');
+    if (bankNameEl) bankNameEl.value = '';
+    if (bankNumberEl) bankNumberEl.value = '';
+    if (bankIfscEl) bankIfscEl.value = '';
+    toggleBankInputs(false);
 
-        // Clear chatbot history
-        const fsChatBody = document.getElementById('fullscreen-chat-body');
-        if (fsChatBody) {
-            fsChatBody.innerHTML = '';
-        }
-        const fsChatInput = document.getElementById('fullscreen-chat-input');
-        if (fsChatInput) {
-            fsChatInput.value = '';
-        }
-    });
-}
+    // Clear chatbot history
+    const fsChatBody = document.getElementById('fullscreen-chat-body');
+    if (fsChatBody) {
+        fsChatBody.innerHTML = '';
+    }
+    const fsChatInput = document.getElementById('fullscreen-chat-input');
+    if (fsChatInput) {
+        fsChatInput.value = '';
+    }
+});
 
 // Periodic Synchronization
 async function syncStateData() {
@@ -305,7 +249,7 @@ async function syncStateData() {
     const editDrawer = document.getElementById('hr-edit-drawer');
     if (editDrawer && !editDrawer.classList.contains('hidden')) return;
     try {
-        const res = await fetch('/api/state?t=' + Date.now());
+        const res = await fetch('/api/state');
         systemState = await res.json();
         updateDashboardView();
     } catch (e) {
@@ -365,9 +309,6 @@ function switchTab(tabId) {
     }
     if (tabId === 'admin-calendar') {
         initAdminCalendar();
-    }
-    if (tabId === 'candidate-attendance' || tabId === 'candidate-profile') {
-        syncStateData();
     }
 }
 
@@ -563,19 +504,51 @@ function updateDashboardView() {
         const presentCount = document.getElementById('attendance-present-count');
         const absentCount = document.getElementById('attendance-absent-count');
         const totalWorkingDays = document.getElementById('attendance-total-working-days');
+        
+        function getWeekdaysInMonthUpToToday() {
+            const date = new Date();
+            const year = date.getFullYear();
+            const month = date.getMonth();
+            const todayDay = date.getDate();
+            let weekdays = 0;
+            for (let d = 1; d <= todayDay; d++) {
+                const curDate = new Date(year, month, d);
+                const dayOfWeek = curDate.getDay();
+                if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                    weekdays++;
+                }
+            }
+            return weekdays;
+        }
+
         const currentDate = new Date();
         const currentYear = currentDate.getFullYear();
         const currentMonth = currentDate.getMonth();
+        
+        let lopDays = 0;
+        let regularLeaves = 0;
         const absentRecordList = [];
 
         if (teacher.attendance) {
             teacher.attendance.forEach(att => {
                 if (att.status === 'Absent') {
+                    const attDate = new Date(att.date);
+                    const isCurrentMonthObj = (attDate.getFullYear() === currentYear && attDate.getMonth() === currentMonth);
+
                     // Find corresponding leave request
                     const leaveReq = (teacher.applied_leaves || []).find(lvl => lvl.date === att.date);
 
-                    if (!leaveReq || (leaveReq.status !== 'approved' && leaveReq.status !== 'accepted')) {
-                        // Unpaid / LOP / Pending / Rejected: show in absent table
+                    if (leaveReq && (leaveReq.status === 'approved' || leaveReq.status === 'accepted')) {
+                        // Paid leave: count towards regular leaves, do not add to absent table
+                        if (isCurrentMonthObj) {
+                            regularLeaves++;
+                        }
+                    } else {
+                        // Unpaid / LOP / Pending / Rejected: count towards LOP, show in absent table
+                        if (isCurrentMonthObj) {
+                            lopDays++;
+                        }
+
                         absentRecordList.push({
                             date: att.date,
                             type: leaveReq ? leaveReq.type : 'Absent (No leave requested)',
@@ -589,20 +562,16 @@ function updateDashboardView() {
             });
         }
 
-        // Attendance Counters — read directly from DB as independent absolute integers.
-        // No local math. The server recomputes these from the full attendance array on each upload.
         const tDays = systemState.global_working_days !== undefined ? systemState.global_working_days : 26;
-        const pDays = teacher.present_days !== undefined ? teacher.present_days : 0;
-        const aDays = teacher.absent_days !== undefined ? teacher.absent_days : 0;
-        const lopDays = teacher.loss_of_pay_leaves !== undefined ? teacher.loss_of_pay_leaves : 0;
-
+        const aDays = regularLeaves + lopDays;
+        const pDays = teacher.present_days !== undefined ? teacher.present_days : 24;
+        
         if (presentCount) presentCount.innerText = pDays;
         if (absentCount) absentCount.innerText = aDays;
         if (totalWorkingDays) totalWorkingDays.innerText = tDays;
-
+        
         const lossOfPayLeaves = document.getElementById('attendance-loss-of-pay-leaves');
         if (lossOfPayLeaves) lossOfPayLeaves.innerText = lopDays;
-
 
         const attendanceBody = document.getElementById('attendance-record-body');
         attendanceBody.innerHTML = '';
@@ -2771,10 +2740,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const dateInput = document.getElementById('leave-date-input');
             const typeSelect = document.getElementById('leave-type-select');
             const descInput = document.getElementById('leave-desc-input');
-            const daysInput = document.getElementById('leave-days-input');
             
-            if (!dateInput || !typeSelect || !dateInput.value || !typeSelect.value || !descInput || !descInput.value.trim()) {
-                alert('Please fill out all required fields, including the Description.');
+            if (!dateInput || !typeSelect || !dateInput.value || !typeSelect.value || !descInput || !descInput.value) {
+                alert('Please fill out all required fields.');
                 return;
             }
             
@@ -2784,7 +2752,6 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.append('leave_type', typeSelect.value);
             formData.append('title', typeSelect.value);
             formData.append('description', descInput.value.trim());
-            formData.append('duration_days', daysInput ? daysInput.value : '1');
             if (leaveFileInput && leaveFileInput.files && leaveFileInput.files.length > 0) {
                 formData.append('file', leaveFileInput.files[0]);
             }
@@ -2807,7 +2774,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     dateInput.value = '';
                     typeSelect.value = '';
                     descInput.value = '';
-                    if (daysInput) daysInput.value = '1';
                     if (leaveFileInput) leaveFileInput.value = '';
                     if (leaveFileName) leaveFileName.innerText = 'No file selected';
                     syncStateData();
@@ -2818,101 +2784,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } catch (error) {
                 alert('Server communication error during leave application submission.');
-            }
-        });
-    }
-
-    // --- HR Excel Attendance Upload Handler ---
-    const hrExcelUploadForm = document.getElementById('hr-excel-upload-form');
-    if (hrExcelUploadForm) {
-        // Pre-fill today's date
-        const excelDateInput = document.getElementById('hr-excel-date');
-        if (excelDateInput && !excelDateInput.value) {
-            const today = new Date();
-            const offset = today.getTimezoneOffset();
-            const localToday = new Date(today.getTime() - (offset * 60 * 1000));
-            excelDateInput.value = localToday.toISOString().split('T')[0];
-        }
-
-        hrExcelUploadForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const dateInput = document.getElementById('hr-excel-date');
-            const fileInput = document.getElementById('hr-excel-file');
-            const statusDiv = document.getElementById('hr-excel-status');
-            const submitBtn = hrExcelUploadForm.querySelector('button[type="submit"]');
-
-            if (!dateInput || !dateInput.value) {
-                if (statusDiv) statusDiv.innerHTML = '<span style="color:#ff6b6b;">⚠️ Please select a date.</span>';
-                return;
-            }
-            if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-                if (statusDiv) statusDiv.innerHTML = '<span style="color:#ff6b6b;">⚠️ Please select an .xlsx file to upload.</span>';
-                return;
-            }
-            const selectedFile = fileInput.files[0];
-            if (!selectedFile.name.toLowerCase().endsWith('.xlsx')) {
-                if (statusDiv) statusDiv.innerHTML = '<span style="color:#ff6b6b;">❌ Invalid file type. Only .xlsx Excel files are accepted.</span>';
-                return;
-            }
-
-            const originalBtnText = submitBtn ? submitBtn.innerHTML : '';
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.innerHTML = '⏳ Processing...';
-            }
-            if (statusDiv) statusDiv.innerHTML = '<span style="color:#8b949e;">📤 Uploading and processing attendance sheet...</span>';
-
-            try {
-                const formData = new FormData();
-                formData.append('file', selectedFile);
-                formData.append('date', dateInput.value);
-
-                const res = await fetch('/api/attendance/excel-upload', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (submitBtn) {
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = originalBtnText;
-                }
-
-                if (res.ok) {
-                    const data = await res.json();
-                    const presentCount = data.present_count ?? 0;
-                    const absentCount = data.absent_count ?? 0;
-                    const total = data.teachers_processed ?? 0;
-                    if (statusDiv) {
-                        statusDiv.innerHTML = `
-                            <div style="background: rgba(46,160,67,0.1); border: 1px solid rgba(46,160,67,0.3); border-radius: 8px; padding: 12px 16px; margin-top: 8px;">
-                                <div style="color: #56d364; font-weight: 600; margin-bottom: 6px;">✅ Attendance Processed Successfully</div>
-                                <div style="color: #c9d1d9; font-size: 0.85rem; display: flex; gap: 20px; flex-wrap: wrap;">
-                                    <span>📅 Date: <strong>${data.date}</strong></span>
-                                    <span>👥 Total Teachers: <strong>${total}</strong></span>
-                                    <span>✅ Present: <strong style="color:#56d364;">${presentCount}</strong></span>
-                                    <span>❌ Absent: <strong style="color:#ff7b72;">${absentCount}</strong></span>
-                                </div>
-                            </div>`;
-                    }
-                    // Reset file input but keep date
-                    fileInput.value = '';
-                    // Refresh dashboard to show updated counts
-                    await syncStateData();
-                    console.log('[EXCEL UPLOAD] Success:', data);
-                } else {
-                    let errMsg = 'Unknown server error.';
-                    try { const errData = await res.json(); errMsg = errData.detail || errMsg; } catch (_) {}
-                    if (statusDiv) statusDiv.innerHTML = `<span style="color:#ff6b6b;">❌ Upload failed: ${errMsg}</span>`;
-                    console.error('[EXCEL UPLOAD] Server error:', res.status, errMsg);
-                }
-            } catch (err) {
-                if (submitBtn) {
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = originalBtnText;
-                }
-                if (statusDiv) statusDiv.innerHTML = '<span style="color:#ff6b6b;">❌ Network error. Could not reach the server.</span>';
-                console.error('[EXCEL UPLOAD] Network error:', err);
             }
         });
     }
@@ -4319,69 +4190,26 @@ async function loadSalaryHistory() {
     }
 }
 
-// ── Salary Management helpers ────────────────────────────────────────────────
-
-function buildMonthOptions() {
-    const sel = document.getElementById('hr-salary-month');
-    if (!sel || sel.options.length > 1) return; // already populated
-    const now = new Date();
-    sel.innerHTML = '';
-    for (let i = 0; i < 12; i++) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const val = d.toISOString().substring(0, 7);           // YYYY-MM
-        const label = d.toLocaleString('default', { month: 'long', year: 'numeric' });
-        const opt = document.createElement('option');
-        opt.value = val;
-        opt.textContent = label;
-        if (i === 0) opt.selected = true;
-        sel.appendChild(opt);
-    }
-}
-
-function formatINR(n) {
-    return '₹ ' + Math.round(n).toLocaleString('en-IN');
-}
-
 // HR Salary Management Logic
 async function loadHrSalaryList() {
-    buildMonthOptions();
-
-    const monthSel   = document.getElementById('hr-salary-month');
-    const searchEl   = document.getElementById('hr-salary-search');
-    const tbody      = document.getElementById('hr-salary-list-body');
-    const infoBar    = document.getElementById('hr-salary-info-bar');
-    if (!tbody) return;
-
-    const month      = monthSel ? monthSel.value : new Date().toISOString().substring(0, 7);
-    const searchTerm = (searchEl ? searchEl.value : '').toLowerCase();
-
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:20px;">Loading...</td></tr>';
-    if (infoBar) infoBar.style.display = 'none';
-
     try {
-        const res = await fetch(`/api/hr/salary/calculate?month=${month}&t=${Date.now()}`);
-        if (!res.ok) throw new Error('Failed to fetch salary data');
+        const res = await fetch('/api/state');
+        if (!res.ok) throw new Error('Failed to fetch state');
         const data = await res.json();
-
+        
+        const tbody = document.getElementById('hr-salary-list-body');
+        if(!tbody) return;
         tbody.innerHTML = '';
-
-        const teachers = (data.teachers || []).filter(t => {
-            if (!searchTerm) return true;
-            return (t.name || '').toLowerCase().includes(searchTerm)
-                || (t.employee_id || '').toLowerCase().includes(searchTerm);
-        });
-
-        if (teachers.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:20px;">No teachers found.</td></tr>';
+        
+        if (!data.teachers || Object.keys(data.teachers).length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No teachers found.</td></tr>';
             return;
         }
 
-        let totalNet = 0;
-        teachers.forEach(t => {
-            const alreadyPushed = t.salary_pushed === true;
-            totalNet += (t.net || 0);
+        const currentMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
+        const BASE_WORKING_DAYS = data.global_working_days !== undefined ? data.global_working_days : 26;
+        const PER_DAY_WAGE = 3400;
 
-<<<<<<< Updated upstream
         for (const [username, details] of Object.entries(data.teachers)) {
             // Apply search filter
             const searchInput = document.getElementById('hr-salary-search');
@@ -4399,98 +4227,86 @@ async function loadHrSalaryList() {
                     else if (a.status === 'Absent') absentThisMonth++;
                 }
             });
-            const tr = document.createElement('tr');
-            tr.dataset.username   = t.username;
-            tr.dataset.name       = t.name || '';
-            tr.dataset.month      = month;
-            tr.dataset.monthLabel = monthSel ? monthSel.options[monthSel.selectedIndex]?.text : month;
-            tr.dataset.present    = t.present_this_month || 0;
-            tr.dataset.lop        = t.lop_this_month || 0;
-            tr.dataset.gross      = t.gross || 0;
-            tr.dataset.deduction  = t.deduction || 0;
-            tr.dataset.net        = t.net || 0;
+            // Fallback to stored field if no current-month attendance entries yet
+            const presentDays = presentThisMonth > 0
+                ? presentThisMonth
+                : (details.present_days !== undefined ? details.present_days : BASE_WORKING_DAYS - absentThisMonth);
+            const netSalary = presentDays * PER_DAY_WAGE;
 
+            const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td style="font-weight:500;">${t.name || t.username}</td>
-                <td style="color:#8b949e; font-size:13px;">${t.employee_id || '—'}</td>
-                <td style="color:#3fb950; font-weight:600;">${t.present_this_month || 0}</td>
-                <td style="color:${(t.lop_this_month || 0) > 0 ? '#f85149' : '#8b949e'}; font-weight:600;">${t.lop_this_month || 0}</td>
-                <td style="color:#8b949e;">${formatINR(t.gross || 0)}</td>
-                <td style="color:${(t.deduction || 0) > 0 ? '#f85149' : '#8b949e'};">${(t.deduction || 0) > 0 ? '−' + formatINR(t.deduction) : '—'}</td>
-                <td style="font-weight:700; color:#3fb950; font-size:15px;">${formatINR(t.net || 0)}</td>
-                <td>
-                    ${alreadyPushed
-                        ? `<span style="color:#3fb950; font-size:12px; font-weight:600;">✔ Pushed</span>`
-                        : `<button class="btn btn-sm btn-primary push-salary-btn"
-                                style="font-size:12px; padding:5px 12px;"
-                                data-username="${t.username}">Push Salary</button>`
-                    }
+                <td>${details.name || username}</td>
+                <td>${details.emp_id || username}</td>
+                <td style="color: #f85149; font-weight: 600;">${absentThisMonth}</td>
+                <td style="color: #3fb950; font-weight: 600;">${presentDays}</td>
+                <td style="font-weight: 500;">₹ ${netSalary.toLocaleString()}</td>
+                <td style="text-align: center;">
+                    <input type="checkbox" class="salary-select-cb"
+                        data-username="${username}"
+                        data-salary="${netSalary}"
+                        style="width: 16px; height: 16px; accent-color: #58a6ff; cursor: pointer;">
                 </td>
             `;
             tbody.appendChild(tr);
-        });
-
-        // Info bar summary
-        if (infoBar) {
-            const monthLabel = monthSel ? monthSel.options[monthSel.selectedIndex]?.text : month;
-            infoBar.innerHTML = `
-                📊 <strong>${teachers.length}</strong> teachers &nbsp;|&nbsp;
-                Working days: <strong>${(teachers[0] || {}).working_days || '—'}</strong> &nbsp;|&nbsp;
-                Daily rate: <strong>₹ ${((teachers[0] || {}).daily_rate || 3400).toLocaleString()}</strong> &nbsp;|&nbsp;
-                Total payout: <strong style="color:#3fb950;">${formatINR(totalNet)}</strong> &nbsp;|&nbsp;
-                Month: <strong>${monthLabel}</strong>
-            `;
-            infoBar.style.display = 'block';
         }
 
-        // Wire individual Push Salary buttons
-        document.querySelectorAll('.push-salary-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const row = e.target.closest('tr');
-                await pushSalaryForRow(row, e.target);
+        // Select All toggle
+        const selectAllCb = document.getElementById('salary-select-all');
+        if (selectAllCb) {
+            const newCb = selectAllCb.cloneNode(true); // remove old listeners
+            selectAllCb.parentNode.replaceChild(newCb, selectAllCb);
+            newCb.checked = false;
+            newCb.addEventListener('change', (e) => {
+                document.querySelectorAll('.salary-select-cb').forEach(cb => cb.checked = e.target.checked);
             });
-        });
+        }
+
+        // Bulk Push Salary button
+        const bulkBtn = document.getElementById('bulk-push-salary-btn');
+        if (bulkBtn) {
+            const newBtn = bulkBtn.cloneNode(true); // remove old listeners
+            bulkBtn.parentNode.replaceChild(newBtn, bulkBtn);
+            newBtn.addEventListener('click', async () => {
+                const selected = [...document.querySelectorAll('.salary-select-cb:checked')];
+                if (selected.length === 0) {
+                    alert('Please select at least one teacher to push salary.');
+                    return;
+                }
+                newBtn.disabled = true;
+                newBtn.innerText = `Pushing (0/${selected.length})...`;
+                const monthStr = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+
+                let pushed = 0;
+                for (const cb of selected) {
+                    const targetUsername = cb.dataset.username;
+                    const salary = cb.dataset.salary;
+                    try {
+                        await fetch('/api/hr/salary/push', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                username: targetUsername,
+                                amount: `₹ ${parseInt(salary).toLocaleString()}`,
+                                month: monthStr
+                            })
+                        });
+                        pushed++;
+                        newBtn.innerText = `Pushing (${pushed}/${selected.length})...`;
+                    } catch (err) {
+                        console.error(`Failed to push salary for ${targetUsername}`, err);
+                    }
+                }
+
+                newBtn.disabled = false;
+                newBtn.innerText = 'Push Salary';
+                const selectAll = document.getElementById('salary-select-all');
+                if (selectAll) selectAll.checked = false;
+                await loadHrSalaryList();
+            });
+        }
 
     } catch (e) {
         console.error("Failed to load HR salary list", e);
-        tbody.innerHTML = `<tr><td colspan="8" class="text-center" style="color:#f85149; padding:20px;">Error loading salary data. ${e.message}</td></tr>`;
-    }
-}
-
-async function pushSalaryForRow(row, btn) {
-    if (!row) return;
-    btn.disabled = true;
-    btn.innerText = 'Pushing...';
-
-    const payload = {
-        username:     row.dataset.username,
-        amount:       formatINR(parseFloat(row.dataset.net || 0)),
-        month:        row.dataset.monthLabel || row.dataset.month,
-        month_key:    row.dataset.month,
-        present_days: parseInt(row.dataset.present || 0),
-        lop_days:     parseInt(row.dataset.lop || 0),
-        gross:        parseFloat(row.dataset.gross || 0),
-        deduction:    parseFloat(row.dataset.deduction || 0),
-        net:          parseFloat(row.dataset.net || 0),
-    };
-
-    try {
-        const res = await fetch('/api/hr/salary/push', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        if (res.ok) {
-            btn.outerHTML = `<span style="color:#3fb950; font-size:12px; font-weight:600;">✔ Pushed</span>`;
-        } else {
-            btn.disabled = false;
-            btn.innerText = 'Push Salary';
-            alert('Failed to push salary for ' + (row.dataset.name || row.dataset.username));
-        }
-    } catch (err) {
-        console.error(err);
-        btn.disabled = false;
-        btn.innerText = 'Push Salary';
     }
 }
 
@@ -4561,116 +4377,14 @@ document.addEventListener('DOMContentLoaded', () => {
             loadHrSalaryList();
         });
     }
-
-    // Month picker → reload
-    document.addEventListener('change', (e) => {
-        if (e.target && e.target.id === 'hr-salary-month') {
-            loadHrSalaryList();
-        }
-    });
-
-    // Refresh button
-    document.addEventListener('click', (e) => {
-        if (e.target && e.target.id === 'hr-salary-refresh-btn') {
-            loadHrSalaryList();
-        }
-    });
-
-    // Search input → reload (debounced)
+    
+    // Add listener for HR salary search input
     const hrSalarySearch = document.getElementById('hr-salary-search');
     if (hrSalarySearch) {
-        let _salaryDebounce;
         hrSalarySearch.addEventListener('input', () => {
-            clearTimeout(_salaryDebounce);
-            _salaryDebounce = setTimeout(() => loadHrSalaryList(), 300);
+            loadHrSalaryList();
         });
     }
-
-    // Push All Salaries
-    document.addEventListener('click', async (e) => {
-        if (!e.target || e.target.id !== 'hr-push-all-btn') return;
-        const pendingBtns = [...document.querySelectorAll('.push-salary-btn')];
-        if (pendingBtns.length === 0) {
-            alert('No pending salaries to push.');
-            return;
-        }
-        const confirmed = confirm(
-            `Push salaries for ${pendingBtns.length} teacher(s)?\n\nThis will:\n• Credit each teacher's salary\n• Reset their attendance counters to 0 for the next month`
-        );
-        if (!confirmed) return;
-
-        e.target.disabled = true;
-        e.target.innerText = `Pushing 0 / ${pendingBtns.length}...`;
-
-        let done = 0;
-        for (const btn of pendingBtns) {
-            const row = btn.closest('tr');
-            await pushSalaryForRow(row, btn);
-            done++;
-            const remaining = document.querySelectorAll('.push-salary-btn').length;
-            e.target.innerText = remaining > 0
-                ? `Pushing ${done} / ${pendingBtns.length}...`
-                : `✔ All ${pendingBtns.length} pushed`;
-        }
-
-        e.target.disabled = false;
-        if (document.querySelectorAll('.push-salary-btn').length === 0) {
-            e.target.style.background = 'rgba(46,160,67,0.2)';
-            e.target.style.color = '#3fb950';
-            e.target.innerText = `✔ All Salaries Pushed`;
-        }
-    });
-
-    // Purge Old Attendance Records
-    document.addEventListener('click', async (e) => {
-        if (!e.target || e.target.id !== 'hr-purge-btn') return;
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - 61);
-        const cutoffStr = cutoffDate.toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' });
-
-        const confirmed = confirm(
-            `⚠️ Purge Old Attendance Records?\n\n` +
-            `This will permanently delete all daily attendance log entries older than:\n` +
-            `${cutoffStr} (2 months ago)\n\n` +
-            `• Attendance COUNTERS (present_days, absent_days, LOP) will be recomputed from remaining records\n` +
-            `• Salary history is NOT affected\n\n` +
-            `This cannot be undone. Continue?`
-        );
-        if (!confirmed) return;
-
-        e.target.disabled = true;
-        e.target.innerText = '🗑️ Purging...';
-
-        try {
-            const res = await fetch('/api/hr/salary/purge-old-attendance', { method: 'POST' });
-            const data = await res.json();
-            const infoBar = document.getElementById('hr-salary-info-bar');
-            if (infoBar) {
-                infoBar.innerHTML = `
-                    ✅ <strong>Purge complete.</strong>
-                    Deleted <strong>${data.deleted_count || 0}</strong> attendance entries
-                    across <strong>${data.teachers_affected || 0}</strong> teachers.
-                    Cutoff: <strong>${data.cutoff_date || ''}</strong>
-                `;
-                infoBar.style.background = 'rgba(46,160,67,0.1)';
-                infoBar.style.borderColor = 'rgba(46,160,67,0.3)';
-                infoBar.style.color = '#3fb950';
-                infoBar.style.display = 'block';
-                setTimeout(() => {
-                    infoBar.style.background = '';
-                    infoBar.style.borderColor = '';
-                    infoBar.style.color = '';
-                }, 5000);
-            }
-            loadHrSalaryList(); // reload to reflect updated counters
-        } catch (err) {
-            console.error(err);
-            alert('Purge failed: ' + err.message);
-        } finally {
-            e.target.disabled = false;
-            e.target.innerText = '🗑️ Purge Old Records';
-        }
-    });
 
     // Add listener for HR OCR Upload Form
     const hrOcrUploadForm = document.getElementById('hr-ocr-upload-form');
@@ -4704,7 +4418,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     fileInput.value = '';
                     
                     // Reload state to refresh teacher dashboard views and lists
-                    const stateRes = await fetch('/api/state?t=' + Date.now());
+                    const stateRes = await fetch('/api/state');
                     systemState = await stateRes.json();
                     updateDashboardView();
                 } else {
