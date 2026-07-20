@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PES University Academic Portal</title>
-    <link rel="stylesheet" href="/static/style.css?v=1.0.25">
+    <link rel="stylesheet" href="/static/style.css?v=1.0.26">
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@500;700&display=swap"
         rel="stylesheet">
@@ -263,6 +263,12 @@
                                             <option value="Bereavement Leave">Bereavement Leave</option>
                                             <option value="Relocation Transfer Leave">Relocation Transfer Leave</option>
                                         </select>
+                                    </div>
+                                    
+                                    <div style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 200px;">
+                                        <label for="leave-days-input" style="font-size: 0.85rem; color: #8b949e;">Number of Days</label>
+                                        <input type="number" id="leave-days-input" min="1" value="1" required
+                                            style="background: #0d1117; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; padding: 10px; color: #ffffff; font-size: 0.9rem; outline: none; box-sizing: border-box; width: 100%;">
                                     </div>
                                 </div>
                                 <div style="display: flex; flex-direction: column; gap: 6px;">
@@ -654,40 +660,67 @@
                     <!-- HR Salary Management View -->
                     <div id="tab-hr-salary" class="tab-pane hidden">
                         <h2>Salary Management</h2>
-                        <p class="section-desc">Disburse salaries based on teacher attendance</p>
-                        
-                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 15px;">
-                            <input type="text" id="hr-salary-search" class="form-control"
-                                placeholder="Search by Teacher Name or ID..."
-                                style="flex: 1; min-width: 220px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 10px 14px; border-radius: 8px;">
-                            <div style="display: flex; align-items: center; gap: 10px; white-space: nowrap;">
-                                <label style="display: flex; align-items: center; gap: 6px; color: #c9d1d9; font-size: 0.9rem; cursor: pointer; margin: 0;">
-                                    <input type="checkbox" id="salary-select-all" style="width: 16px; height: 16px; accent-color: #58a6ff;">
-                                    Select All
-                                </label>
-                                <button id="bulk-push-salary-btn" class="btn btn-primary" style="padding: 8px 18px;">Push Salary</button>
+                        <p class="section-desc">Calculate and disburse monthly salaries based on attendance records</p>
+
+                        <!-- Controls row -->
+                        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:20px; margin-bottom:16px;">
+                            <!-- Month picker -->
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <label for="hr-salary-month" style="color:#8b949e; font-size:13px; white-space:nowrap;">Month:</label>
+                                <select id="hr-salary-month"
+                                    style="background:#161b22; border:1px solid rgba(255,255,255,0.15); color:#e6edf3; padding:8px 12px; border-radius:8px; font-size:14px; cursor:pointer;">
+                                    <!-- Populated by JS -->
+                                </select>
                             </div>
+
+                            <!-- Search -->
+                            <input type="text" id="hr-salary-search" class="form-control"
+                                placeholder="Search teacher or ID..."
+                                style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff; padding:8px 14px; border-radius:8px; width:220px;">
+
+                            <!-- Refresh -->
+                            <button id="hr-salary-refresh-btn" class="btn btn-sm"
+                                style="background:rgba(255,255,255,0.08); color:#e6edf3; border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:8px 16px; cursor:pointer;">
+                                🔄 Refresh
+                            </button>
+
+                            <!-- Push All -->
+                            <button id="hr-push-all-btn" class="btn btn-sm btn-primary"
+                                style="background:linear-gradient(135deg,#1f6feb,#388bfd); color:#fff; border:none; border-radius:8px; padding:8px 18px; font-weight:600; cursor:pointer; margin-left:auto;">
+                                💰 Push All Salaries
+                            </button>
+
+                            <!-- Purge Attendance -->
+                            <button id="hr-purge-btn" class="btn btn-sm"
+                                style="background:rgba(248,81,73,0.12); color:#f85149; border:1px solid rgba(248,81,73,0.3); border-radius:8px; padding:8px 16px; cursor:pointer; font-weight:500;">
+                                🗑️ Purge Old Records
+                            </button>
                         </div>
 
-                        <div class="attendance-table-wrapper mt-4">
+                        <!-- Info bar -->
+                        <div id="hr-salary-info-bar" style="display:none; background:rgba(31,111,235,0.1); border:1px solid rgba(31,111,235,0.25); border-radius:8px; padding:10px 16px; margin-bottom:14px; font-size:13px; color:#8b949e;"></div>
+
+                        <div class="attendance-table-wrapper mt-2">
                             <table class="record-table">
                                 <thead>
                                     <tr>
                                         <th>Teacher Name</th>
-                                        <th>Employee ID</th>
-                                        <th>Absent Days</th>
-                                        <th>Present Days</th>
+                                        <th>Emp ID</th>
+                                        <th>Present</th>
+                                        <th>LOP Days</th>
+                                        <th>Gross</th>
+                                        <th>LOP Deduction</th>
                                         <th>Net Salary</th>
-                                        <th style="text-align: center;">Select</th>
+                                        <th>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody id="hr-salary-list-body">
-                                    <!-- Dynamic rows for salary disbursement -->
+                                    <!-- Dynamic rows populated by loadHrSalaryList() -->
                                 </tbody>
                             </table>
                         </div>
                     </div>
-                    
+
                     <!-- Manage Teachers List View -->
                     <div id="tab-hr-teachers-list" class="tab-pane hidden">
                         <h2>Manage Teachers</h2>
@@ -769,26 +802,29 @@
                     <div id="tab-hr-attendance-manager" class="tab-pane hidden">
                         <h2>Attendance Manager</h2>
                         <p class="section-desc">Manage faculty working days and review, accept, or reject leave requests</p>
-                                                <!-- OCR Attendance Upload Panel -->
+                                                <!-- Excel Attendance Upload Panel -->
                         <div class="project-upload-section mt-3 mb-4" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px;">
                             <h3 style="font-size: 1.1rem; margin-top: 0; margin-bottom: 15px; color: #58a6ff; display: flex; align-items: center; gap: 8px;">
-                                <span>📄</span> Upload Attendance Sheet (OCR)
+                                <span>📊</span> Upload Daily Attendance Sheet (Excel)
                             </h3>
-                            <form id="hr-ocr-upload-form" style="display: flex; flex-direction: column; gap: 15px; width: 100%;">
+                            <p style="font-size: 0.85rem; color: #8b949e; margin: 0 0 15px 0; line-height: 1.5;">
+                                Upload the daily <strong style="color:#c9d1d9;">.xlsx</strong> file listing teachers who are <strong style="color:#56d364;">PRESENT</strong> today. Teachers not found will be automatically marked Absent (Loss of Pay or Regular Leave if applicable).
+                            </p>
+                            <form id="hr-excel-upload-form" style="display: flex; flex-direction: column; gap: 15px; width: 100%;">
                                 <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
                                     <div style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 200px;">
-                                        <label for="hr-ocr-date" style="font-size: 0.85rem; color: #8b949e; font-weight: 500;">Select Date</label>
-                                        <input type="date" id="hr-ocr-date" required
-                                            style="background: #0d1117; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; padding: 10px; color: #c9d1d9; font-size: 0.9rem; outline: none; box-sizing: border-box; width: 100%;">
+                                        <label for="hr-excel-date" style="font-size: 0.85rem; color: #8b949e; font-weight: 500;">Attendance Date</label>
+                                        <input type="date" id="hr-excel-date" required
+                                            style="background: #0d1117; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; padding: 10px; color: #c9d1d9; color-scheme: dark; font-size: 0.9rem; outline: none; box-sizing: border-box; width: 100%;">
                                     </div>
                                     <div style="display: flex; flex-direction: column; gap: 6px; flex: 2; min-width: 250px;">
-                                        <label for="hr-ocr-file" style="font-size: 0.85rem; color: #8b949e; font-weight: 500;">Attendance Document (PDF or Image)</label>
-                                        <input type="file" id="hr-ocr-file" accept=".pdf,image/*" required
+                                        <label for="hr-excel-file" style="font-size: 0.85rem; color: #8b949e; font-weight: 500;">Attendance Excel File (.xlsx only)</label>
+                                        <input type="file" id="hr-excel-file" accept=".xlsx" required
                                             style="background: #0d1117; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; padding: 8px; color: #c9d1d9; font-size: 0.9rem; outline: none; box-sizing: border-box; width: 100%;">
                                     </div>
-                                    <button type="submit" class="btn btn-primary" style="height: 42px; padding: 0 20px;">Upload & Parse OCR</button>
+                                    <button type="submit" class="btn btn-primary" style="height: 42px; padding: 0 20px;">📊 Upload & Process</button>
                                 </div>
-                                <div id="hr-ocr-status" style="font-size: 0.9rem; margin-top: 5px;"></div>
+                                <div id="hr-excel-status" style="font-size: 0.9rem; margin-top: 5px;"></div>
                             </form>
                         </div>
 
@@ -1204,6 +1240,7 @@
         </div>
     </div>
 
+<<<<<<< Updated upstream
     <!-- Forgot Password Modal -->
     <div id="forgot-password-modal" class="modal hidden" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px); z-index: 10000; display: flex; align-items: center; justify-content: center;">
         <div class="modal-content glass-card" style="max-width: 480px; width: 90%; text-align: center; margin: auto; padding: 40px 30px;">
@@ -1241,7 +1278,7 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=2.1.8"></script>
+    <script src="/static/app.js?v=2.1.16"></script>
 </body>
 
 </html>

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Form, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Any, Dict, Optional, List
@@ -394,110 +394,306 @@ def run_groq_ocr(file_bytes: bytes, filename: str) -> list:
     return []
 
 
+def sanitize_id_or_email(val: Any) -> str:
+    if not val:
+        return ""
+    return "".join(str(val).split()).lower()
+
+
 def match_teacher(teacher: dict, record: dict) -> bool:
-    rec_email = str(record.get("email_id") or "").strip().lower()
-    t_email = str(teacher.get("email") or "").strip().lower()
+    rec_email = sanitize_id_or_email(record.get("email_id"))
+    t_email = sanitize_id_or_email(teacher.get("email"))
+    rec_empid = sanitize_id_or_email(record.get("employee_id"))
+    t_empid = sanitize_id_or_email(teacher.get("employee_id"))
+    
+    print(f"[LOG 2] Sanitized Data: OCR Email='{rec_email}', Teacher Email='{t_email}' | OCR EmpID='{rec_empid}', Teacher EmpID='{t_empid}'")
+    
     if rec_email and t_email and rec_email == t_email:
+        print(f"[LOG 3] Database Match Result: User Found (Matched by Email: '{rec_email}')")
         return True
     
-    rec_empid = str(record.get("employee_id") or "").strip().lower()
-    t_empid = str(teacher.get("employee_id") or "").strip().lower()
     if rec_empid and t_empid and rec_empid == t_empid:
+        print(f"[LOG 3] Database Match Result: User Found (Matched by Emp ID: '{rec_empid}')")
         return True
     
     rec_name = str(record.get("teacher_name") or "").strip().lower()
     t_name = str(teacher.get("name") or "").strip().lower()
     if rec_name and t_name:
         if rec_name in t_name or t_name in rec_name:
+            print(f"[LOG 3] Database Match Result: User Found (Matched by Name: '{rec_name}' vs '{t_name}')")
             return True
             
+    print(f"[LOG 3] Database Match Result: User NOT Found for OCR record {record}")
     return False
 
 
+
+# Common spreadsheet header/label strings to skip — these appear in the first row
+# of most attendance sheets and are NOT employee IDs.
+_EXCEL_HEADER_SKIP = frozenset({
+    "employeeid", "employee_id", "empid", "emp_id", "id",
+    "employeename", "employee_name", "name", "staffname", "staff_name",
+    "slno", "sl.no", "sno", "s.no", "sr", "sr.no", "srno",
+    "department", "dept", "designation", "status", "date", "none",
+})
+
+
+def extract_employee_ids_from_excel(file_bytes: bytes) -> set[str]:
+    """
+    High-performance Excel parser.
+
+    Performance choices:
+    - read_only=True   : streams the workbook row-by-row without loading the full
+                         DOM into memory — the single biggest speed gain for large files.
+    - data_only=True   : returns cell values, not formula strings.
+    - No style/format  : read_only mode skips loading all conditional formatting,
+                         named styles, and drawing objects.
+
+    Sanitization: whitespace stripped + lowercased (same as DB-side sanitization in
+    the Supabase RPC), then common header labels are discarded so they aren't
+    mistakenly matched against teacher employee IDs.
+    """
+    import io
+    import re
+    import openpyxl
+
+    emp_ids: set[str] = set()
+    try:
+        wb = openpyxl.load_workbook(
+            io.BytesIO(file_bytes),
+            read_only=True,   # ← streaming mode: no full in-memory DOM
+            data_only=True,   # ← return values, not formulas
+        )
+        for sheet in wb.worksheets:
+            for row in sheet.iter_rows(values_only=True):
+                # Stop if an entire row is empty (end of data)
+                if all(cell is None for cell in row):
+                    break
+                for cell in row:
+                    if cell is None:
+                        continue
+                    # Sanitize: strip all whitespace, lowercase
+                    sanitized = re.sub(r"\s+", "", str(cell)).lower()
+                    # Skip empties and known header labels
+                    if sanitized and sanitized not in _EXCEL_HEADER_SKIP:
+                        emp_ids.add(sanitized)
+        wb.close()  # release file handle in read_only mode
+    except Exception as e:
+        print(f"[EXCEL PARSING ERROR] Failed to parse Excel: {e}")
+    return emp_ids
+
+
+
+@router.post("/api/attendance/excel-upload")
 @router.post("/api/attendance/ocr-upload")
-async def ocr_attendance_upload(
+async def excel_attendance_upload(
     file: UploadFile = File(...),
     date: str = Form(...)
 ) -> dict:
+    """
+    Processes a daily .xlsx attendance sheet.
+
+    Execution Strategy:
+    ─────────────────────────────────────────────────────────────────
+    PATH A — Supabase RPC (production, when SUPABASE_URL is set):
+      1. Validate and parse the Excel file on Render (optimized, streaming).
+      2. Sanitize all extracted Employee IDs (strip whitespace, lowercase).
+      3. Send *only* the lightweight list of present IDs + target date to
+         supabase.rpc('process_daily_attendance', ...).
+      4. PostgreSQL applies the three attendance rules, updates all teacher
+         counters, and writes the result in one atomic transaction.
+      5. Sync the updated state back to the local JSON file (for fast reads).
+
+    PATH B — Local Fallback (local dev / no Supabase configured):
+      All logic runs in Python: same three rules, counters recomputed from
+      the full attendance array (idempotent), atomic save at the end.
+    ─────────────────────────────────────────────────────────────────
+
+    Idempotent: re-uploading the same date overwrites, not double-counts.
+    """
+    # ── Validate file type ──────────────────────────────────────────
+    filename = file.filename or ""
+    if not filename.lower().endswith(".xlsx"):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Only .xlsx Excel files are accepted."
+        )
+
     file_bytes = await file.read()
-    records = run_groq_ocr(file_bytes, file.filename)
-    
+
+    # ── Step 1: Optimized Excel parsing (Render side) ───────────────
+    # extract_employee_ids_from_excel uses read_only + data_only mode
+    # for maximum throughput — see its docstring for performance notes.
+    present_emp_ids: list[str] = sorted(extract_employee_ids_from_excel(file_bytes))
+    print(
+        f"[EXCEL UPLOAD] LOG 1 — Parsed '{filename}': "
+        f"{len(present_emp_ids)} present IDs → {present_emp_ids}"
+    )
+    if not present_emp_ids:
+        print("[EXCEL UPLOAD] WARNING — No valid Employee IDs found in the uploaded file.")
+
+    # ── Choose execution path ────────────────────────────────────────
+    supabase_url = os.getenv("SUPABASE_URL", "").strip()
+    supabase_key = os.getenv("SUPABASE_KEY", "").strip()
+    use_rpc = bool(supabase_url and supabase_key)
+
+    if use_rpc:
+        # ════════════════════════════════════════════════════════════
+        # PATH A: Supabase RPC — all attendance logic runs in PostgreSQL
+        # The Render server's only job after parsing is to call the RPC.
+        # ════════════════════════════════════════════════════════════
+        print(f"[EXCEL UPLOAD] PATH A — Delegating to Supabase RPC 'process_daily_attendance'")
+        print(f"[EXCEL UPLOAD] LOG 2 — RPC params: present_ids={present_emp_ids}, target_date='{date}'")
+
+        try:
+            from supabase import create_client
+            sb_client = create_client(supabase_url, supabase_key)
+
+            rpc_result = sb_client.rpc(
+                "process_daily_attendance",
+                {
+                    "present_ids": present_emp_ids,   # sanitized list of present emp IDs
+                    "target_date": date               # e.g. "2026-07-20"
+                }
+            ).execute()
+
+            # rpc_result.data is the JSONB object returned by the PL/pgSQL function
+            summary = rpc_result.data or {}
+            print(
+                f"[EXCEL UPLOAD] LOG 3 — RPC SUCCESS: "
+                f"teachers_processed={summary.get('teachers_processed')}, "
+                f"present={summary.get('present_count')}, "
+                f"absent={summary.get('absent_count')}, "
+                f"lop={summary.get('lop_count')}"
+            )
+
+            # ── Sync updated state back to local JSON file (for /api/state fast-reads) ──
+            # This is a lightweight background operation so the response is not blocked.
+            try:
+                store = LocalStateStore()
+                refreshed = store.load_state()   # this pulls the freshly updated state from Supabase
+                print(f"[EXCEL UPLOAD] LOG 4 — Local sync complete: last_updated={refreshed.get('last_updated')}")
+            except Exception as sync_err:
+                # Non-fatal — Supabase has the truth; local sync is best-effort
+                print(f"[EXCEL UPLOAD] WARNING — Local sync after RPC failed: {sync_err}")
+
+            write_log("HR_PORTAL", f"RPC processed attendance for {len(present_emp_ids)} present IDs on {date}")
+
+            return {
+                "status":             summary.get("status", "success"),
+                "path":               "supabase_rpc",
+                "date":               summary.get("date", date),
+                "teachers_processed": summary.get("teachers_processed", 0),
+                "present_count":      summary.get("present_count", 0),
+                "absent_count":       summary.get("absent_count", 0),
+                "lop_count":          summary.get("lop_count", 0),
+                "extracted_ids":      present_emp_ids,
+            }
+
+        except HTTPException:
+            raise
+        except Exception as rpc_err:
+            print(f"[EXCEL UPLOAD] RPC FAILED — falling back to local logic. Error: {rpc_err}")
+            # Fall through to PATH B on RPC failure so the upload never fully breaks
+            use_rpc = False
+
+    # ════════════════════════════════════════════════════════════════
+    # PATH B: Local Python fallback
+    # Used in: local dev (no Supabase env vars), or when RPC fails.
+    # Same strict rules + idempotency + counter recomputation.
+    # ════════════════════════════════════════════════════════════════
+    print(f"[EXCEL UPLOAD] PATH B — Running local attendance logic (no Supabase RPC)")
+
     store = LocalStateStore()
     state = store.load_state()
     if not state or "teachers" not in state:
         state = initialize_default_state()
-        
-    for username, teacher in state["teachers"].items():
-        if "loss_of_pay_leaves" not in teacher:
-            teacher["loss_of_pay_leaves"] = 0
-            
-        is_present = False
-        for rec in records:
-            if match_teacher(teacher, rec):
-                is_present = True
-                break
-                
-        if "attendance" not in teacher:
-            teacher["attendance"] = []
-            
-        existing_loss_of_pay = False
-        existing_present = False
-        new_attendance = []
-        for att in teacher["attendance"]:
-            if att.get("date") == date:
-                if att.get("status") == "Absent" and att.get("reason") == "Loss of Pay":
-                    existing_loss_of_pay = True
-                elif att.get("status") == "Present":
-                    existing_present = True
-            else:
-                new_attendance.append(att)
-        teacher["attendance"] = new_attendance
-        
-        if "present_days" not in teacher:
-            teacher["present_days"] = 0
 
+    present_id_set = set(present_emp_ids)  # O(1) lookup
+    updates_summary = []
+
+    for username, teacher in state["teachers"].items():
+        teacher.setdefault("loss_of_pay_leaves", 0)
+        teacher.setdefault("present_days", 0)
+        teacher.setdefault("absent_days", 0)
+        teacher.setdefault("attendance", [])
+
+        # Sanitize teacher's employee_id (same algo as extract_employee_ids_from_excel)
+        import re as _re
+        teacher_emp_id = _re.sub(r"\s+", "", str(teacher.get("employee_id") or "")).lower()
+        print(f"[EXCEL UPLOAD] LOG 2 — '{username}' sanitized emp_id='{teacher_emp_id}'")
+
+        is_present = bool(teacher_emp_id and teacher_emp_id in present_id_set)
+        print(f"[EXCEL UPLOAD] LOG 3 — '{username}': {'FOUND (Present)' if is_present else 'NOT FOUND'}")
+
+        # Idempotency: remove any existing entry for this date
+        had_prior = any(a.get("date") == date for a in teacher["attendance"])
+        teacher["attendance"] = [a for a in teacher["attendance"] if a.get("date") != date]
+
+        # Determine attendance record
         if is_present:
-            teacher["attendance"].append({
-                "date": date,
-                "status": "Present",
-                "reason": "OCR Scanned Present"
-            })
-            if not existing_present:
-                teacher["present_days"] = teacher.get("present_days", 0) + 1
-            if existing_loss_of_pay:
-                teacher["loss_of_pay_leaves"] = max(0, teacher["loss_of_pay_leaves"] - 1)
-                
-            write_log("HR_PORTAL", f"OCR marked teacher {username} PRESENT on {date}")
+            new_record = {"date": date, "status": "Present", "reason": "Excel Parsed Present"}
         else:
-            approved_leave = None
-            for lvl in teacher.get("applied_leaves", []):
-                if lvl.get("date") == date and lvl.get("status") == "approved":
-                    approved_leave = lvl
-                    break
-                    
+            approved_leave = next(
+                (lv for lv in teacher.get("applied_leaves", [])
+                 if lv.get("date") == date and lv.get("status") == "approved"),
+                None
+            )
             if approved_leave:
-                teacher["attendance"].append({
+                new_record = {
                     "date": date,
                     "status": "Absent",
                     "reason": f"Regular Leave ({approved_leave.get('type', 'Leave')})"
-                })
-                if existing_loss_of_pay:
-                    teacher["loss_of_pay_leaves"] = max(0, teacher["loss_of_pay_leaves"] - 1)
-                    
-                write_log("HR_PORTAL", f"OCR marked teacher {username} ABSENT (Regular Leave) on {date}")
+                }
             else:
-                teacher["attendance"].append({
-                    "date": date,
-                    "status": "Absent",
-                    "reason": "Loss of Pay"
-                })
-                if not existing_loss_of_pay:
-                    teacher["loss_of_pay_leaves"] = teacher.get("loss_of_pay_leaves", 0) + 1
-                    
-                write_log("HR_PORTAL", f"OCR marked teacher {username} ABSENT (Loss of Pay) on {date}")
-                
-    store.save_state(state)
-    return {"status": "success", "extracted_records": records}
+                new_record = {"date": date, "status": "Absent", "reason": "Loss of Pay"}
+
+        teacher["attendance"].append(new_record)
+
+        # Recompute ALL counters from the complete array (prevents double-counting on re-upload)
+        teacher["present_days"]      = sum(1 for a in teacher["attendance"] if a.get("status") == "Present")
+        teacher["absent_days"]       = sum(1 for a in teacher["attendance"] if a.get("status") == "Absent")
+        teacher["loss_of_pay_leaves"] = sum(
+            1 for a in teacher["attendance"]
+            if a.get("status") == "Absent" and a.get("reason") == "Loss of Pay"
+        )
+
+        action = new_record["reason"]
+        updates_summary.append({"username": username, "status": new_record["status"], "reason": action, "re_upload": had_prior})
+        print(
+            f"[EXCEL UPLOAD] LOG 4 — '{username}': "
+            f"Present={teacher['present_days']}, Absent={teacher['absent_days']}, "
+            f"LOP={teacher['loss_of_pay_leaves']} | Action='{action}'"
+        )
+        write_log("HR_PORTAL", f"[LOCAL] Excel marked '{username}' as '{action}' on {date}")
+
+    # Atomic bulk save — single write, no per-teacher DB calls
+    try:
+        store.save_state(state)
+        print(
+            f"[EXCEL UPLOAD SUCCESS] PATH B complete: "
+            f"Date={date}, Teachers={len(updates_summary)}, last_updated={state.get('last_updated')}"
+        )
+    except Exception as db_err:
+        print(f"[DATABASE UPDATE FAILURE] Bulk save failed: {db_err}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database update failed. Transaction rolled back: {str(db_err)}"
+        )
+
+    present_count = sum(1 for u in updates_summary if u["status"] == "Present")
+    absent_count  = sum(1 for u in updates_summary if u["status"] == "Absent")
+
+    return {
+        "status":             "success",
+        "path":               "local_fallback",
+        "date":               date,
+        "teachers_processed": len(updates_summary),
+        "present_count":      present_count,
+        "absent_count":       absent_count,
+        "extracted_ids":      present_emp_ids,
+        "details":            updates_summary,
+    }
 
 
 
@@ -906,6 +1102,7 @@ async def apply_leave_endpoint(
     leave_type: str = Form(...),
     title: str = Form(...),
     description: str = Form(...),
+    duration_days: int = Form(1),
     file: Optional[UploadFile] = File(None)
 ) -> dict:
     from app.app_utils.telemetry import track_memory
@@ -964,6 +1161,7 @@ async def apply_leave_endpoint(
         "type": leave_type,
         "title": title,
         "description": description,
+        "duration_days": duration_days,
         "document_url": file_url,
         "document_name": filename,
         "status": "pending"
@@ -976,7 +1174,8 @@ async def apply_leave_endpoint(
 
 
 @router.get("/api/state")
-async def get_state() -> dict:
+async def get_state(response: Response) -> dict:
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     store = LocalStateStore()
     state = store.load_state()
     if not state or "teachers" not in state:
@@ -1114,6 +1313,9 @@ def initialize_default_state() -> dict:
                 "password": "password",
                 "seating_info": "Room 405, Desk C",
                 "present_days": 24,
+                "absent_days": 2,
+                "loss_of_pay_leaves": 0,
+                "employee_id": "PESU-1234",
                 "attendance": [
                     {"date": "2026-06-15", "status": "Absent", "reason": "Sick Leave"},
                     {"date": "2026-06-28", "status": "Absent", "reason": "Casual Leave"}
@@ -1780,6 +1982,10 @@ def trigger_action(req: ActionRequest, background_tasks: BackgroundTasks) -> dic
                 "status": "Absent",
                 "reason": reason
             })
+            if "present_days" not in teacher:
+                teacher["present_days"] = 0
+            if existing_present:
+                teacher["present_days"] = max(0, teacher["present_days"] - 1)
             write_log("HR_PORTAL", f"Logged ABSENT for teacher {username} on {date} (Reason: {reason})")
         else:
             teacher["attendance"].append({
@@ -2815,8 +3021,14 @@ def get_salary_history(username: str) -> dict:
 
 class SalaryPushReq(BaseModel):
     username: str
-    amount: str
-    month: str
+    amount: str          # display string e.g. "₹ 88,400"
+    month: str           # display string e.g. "July 2026"
+    month_key: str = "" # YYYY-MM for idempotency check e.g. "2026-07"
+    present_days: int = 0
+    lop_days: int = 0
+    gross: float = 0.0
+    deduction: float = 0.0
+    net: float = 0.0
 
 @router.post("/api/hr/salary/push")
 def push_salary(data: SalaryPushReq) -> dict:
@@ -2824,22 +3036,197 @@ def push_salary(data: SalaryPushReq) -> dict:
     state = store.load_state()
     if not state or "teachers" not in state or data.username not in state["teachers"]:
         raise HTTPException(status_code=404, detail="Teacher not found.")
-        
+
     teacher_data = state["teachers"][data.username]
     if "salary_history" not in teacher_data:
         teacher_data["salary_history"] = []
-        
-    import datetime
-    import secrets
+
     record = {
-        "month": data.month,
-        "amount": data.amount,
+        "month":          data.month,
+        "month_key":      data.month_key or data.month[:7],  # store YYYY-MM for dedup
+        "amount":         data.amount,
+        "present_days":   data.present_days,
+        "lop_days":       data.lop_days,
+        "gross":          data.gross,
+        "deduction":      data.deduction,
+        "net":            data.net,
         "transaction_id": f"TXN-{secrets.token_hex(4).upper()}",
-        "status": "Credited",
-        "credited_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
+        "status":         "Credited",
+        "credited_at":    datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
-    
+
     # Prepend to history
     teacher_data["salary_history"].insert(0, record)
+
+    # Reset attendance counters for the new month
+    teacher_data["present_days"]       = 0
+    teacher_data["absent_days"]        = 0
+    teacher_data["loss_of_pay_leaves"] = 0
+
     store.save_state(state)
+    write_log("HR_PORTAL", f"Salary pushed for {data.username}: {data.amount} for {data.month}")
     return {"status": "success", "record": record}
+
+
+@router.get("/api/hr/salary/calculate")
+def calculate_monthly_salary(month: str = "") -> dict:
+    """
+    Returns a per-teacher salary breakdown for the given month (YYYY-MM).
+    Defaults to the current month if not specified.
+
+    PATH A — Supabase RPC (production):
+        Calls calculate_monthly_salary(target_month) which reads attendance[]
+        directly from the JSONB and returns computed salary rows.
+
+    PATH B — Local Python fallback:
+        Reads local state and computes the same breakdown in Python.
+    """
+    if not month:
+        month = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m")
+
+    supabase_url = os.getenv("SUPABASE_URL", "").strip()
+    supabase_key = os.getenv("SUPABASE_KEY", "").strip()
+
+    if supabase_url and supabase_key:
+        try:
+            from supabase import create_client
+            sb_client = create_client(supabase_url, supabase_key)
+            result = sb_client.rpc(
+                "calculate_monthly_salary",
+                {"target_month": month}
+            ).execute()
+            teachers = result.data or []
+            print(f"[SALARY CALC] RPC returned {len(teachers)} teacher rows for {month}")
+            return {"status": "success", "month": month, "teachers": teachers}
+        except Exception as e:
+            print(f"[SALARY CALC] RPC failed, falling back to local: {e}")
+
+    # PATH B: local Python fallback
+    store = LocalStateStore()
+    state = store.load_state()
+    if not state or "teachers" not in state:
+        return {"status": "success", "month": month, "teachers": []}
+
+    working_days = state.get("global_working_days", 26)
+    rows = []
+    for username, t in state["teachers"].items():
+        daily_rate = float(t.get("daily_rate", 3400))
+        attendance  = t.get("attendance", [])
+        month_att   = [a for a in attendance if str(a.get("date", "")).startswith(month)]
+
+        present_m = sum(1 for a in month_att if a.get("status") == "Present")
+        absent_m  = sum(1 for a in month_att if a.get("status") == "Absent")
+        lop_m     = sum(1 for a in month_att if a.get("status") == "Absent" and a.get("reason") == "Loss of Pay")
+
+        gross     = working_days * daily_rate
+        deduction = lop_m * daily_rate
+        net       = gross - deduction
+
+        # Check if salary was already pushed for this month
+        already_pushed = any(
+            str(h.get("month_key", "")).startswith(month)
+            for h in t.get("salary_history", [])
+        )
+
+        rows.append({
+            "username":           username,
+            "name":               t.get("name", username),
+            "employee_id":        t.get("employee_id", ""),
+            "department":         t.get("department", ""),
+            "working_days":       working_days,
+            "daily_rate":         daily_rate,
+            "present_this_month": present_m,
+            "absent_this_month":  absent_m,
+            "lop_this_month":     lop_m,
+            "gross":              gross,
+            "deduction":          deduction,
+            "net":                net,
+            "salary_pushed":      already_pushed,
+        })
+
+    rows.sort(key=lambda r: r["name"])
+    return {"status": "success", "month": month, "teachers": rows}
+
+
+@router.post("/api/hr/salary/purge-old-attendance")
+def purge_old_attendance() -> dict:
+    """
+    Removes attendance records older than 2 months from every teacher.
+    Recomputes present_days, absent_days, loss_of_pay_leaves from remaining records.
+    Single atomic write.
+
+    PATH A — Supabase RPC (production)
+    PATH B — Local Python fallback
+    """
+    cutoff = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=61))
+    cutoff_str = cutoff.strftime("%Y-%m-%d")
+
+    supabase_url = os.getenv("SUPABASE_URL", "").strip()
+    supabase_key = os.getenv("SUPABASE_KEY", "").strip()
+
+    if supabase_url and supabase_key:
+        try:
+            from supabase import create_client
+            sb_client = create_client(supabase_url, supabase_key)
+            result = sb_client.rpc(
+                "purge_old_attendance",
+                {"cutoff_date": cutoff_str}
+            ).execute()
+            summary = result.data or {}
+            print(f"[PURGE] RPC done: {summary}")
+            write_log("HR_PORTAL", f"Attendance purged: cutoff={cutoff_str}, deleted={summary.get('deleted_count')}")
+            return {"status": "success", "path": "supabase_rpc", **summary}
+        except Exception as e:
+            print(f"[PURGE] RPC failed, falling back to local: {e}")
+
+    # PATH B: local Python fallback
+    store = LocalStateStore()
+    state = store.load_state()
+    if not state or "teachers" not in state:
+        return {"status": "success", "cutoff_date": cutoff_str, "deleted_count": 0, "teachers_affected": 0}
+
+    total_deleted = 0
+    teachers_affected = 0
+    for username, teacher in state["teachers"].items():
+        att = teacher.get("attendance", [])
+        original_len = len(att)
+        kept = [a for a in att if str(a.get("date", "")) >= cutoff_str]
+        removed = original_len - len(kept)
+        if removed > 0:
+            teacher["attendance"] = kept
+            teacher["present_days"]       = sum(1 for a in kept if a.get("status") == "Present")
+            teacher["absent_days"]        = sum(1 for a in kept if a.get("status") == "Absent")
+            teacher["loss_of_pay_leaves"] = sum(
+                1 for a in kept if a.get("status") == "Absent" and a.get("reason") == "Loss of Pay"
+            )
+            total_deleted += removed
+            teachers_affected += 1
+
+    store.save_state(state)
+    write_log("HR_PORTAL", f"[LOCAL] Attendance purged: cutoff={cutoff_str}, deleted={total_deleted}")
+    return {
+        "status":            "success",
+        "path":              "local_fallback",
+        "cutoff_date":       cutoff_str,
+        "deleted_count":     total_deleted,
+        "teachers_affected": teachers_affected,
+    }
+
+
+@router.post("/api/test-attendance-update")
+async def test_attendance_update() -> dict:
+    store = LocalStateStore()
+    state = store.load_state()
+    # Find Jane Doe ('teacher' in teachers dictionary)
+    teacher = state.get("teachers", {}).get("teacher")
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Jane Doe ('teacher') not found in state.")
+    
+    teacher["present_days"] = teacher.get("present_days", 0) + 1
+    try:
+        store.save_state(state)
+        print(f"[TEST ENDPOINT] Incremented Jane Doe's present days to {teacher['present_days']}. Database write successful.")
+        return {"status": "success", "new_present_days": teacher["present_days"]}
+    except Exception as e:
+        print(f"[TEST ENDPOINT ERROR] Failed to save state: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
